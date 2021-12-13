@@ -1,0 +1,138 @@
+state = {
+listofUsers: this.props.location.state.listofUsers,
+			searchUserList: [],
+      selectedUser: '',
+      }
+      
+      
+      
+      ==================
+      
+      static getDerivedStateFromProps(props, state) {
+		// if (!state.isUpdate) {
+		// const tempArr = [];
+		const getSelectedLinkTobyclaim = props.systemfields.find(
+			i => i.fieldsubtype.toString().toLowerCase() === 'ryze file number'
+		);
+    }}
+      
+      listofUsers: props.location?.state?.listofUsers,
+
+onSearchUser = e => {
+		if (e.target.value.length + 1 > 3) {
+			console.log(e.target.value.length);
+			const searchtext = e.target.value;
+			const filterClient = this.state.listofUsers.filter(
+				f =>
+					f.firstname?.toLowerCase().toString().includes(searchtext.toLowerCase().toString()) ||
+					f.lastname?.toLowerCase().toString().includes(searchtext.toLowerCase().toString()) ||
+					f.companyname?.toLowerCase().toString().includes(searchtext.toLowerCase().toString()) ||
+					f.name?.toLowerCase().toString().includes(searchtext.toLowerCase().toString())
+			);
+			if (filterClient.length > 0) {
+				this.setState({
+					searchUserList: filterClient
+				});
+			} else {
+				this.setState({
+					searchUserList: []
+				});
+			}
+		} else {
+			this.setState({
+				searchUserList: []
+			});
+		}
+	};
+
+========================
+handleSelectedUserChange = newValue => {
+		if (this.state.selectedClient !== null && newValue !== null) {
+			const selectedclientid = this.state.selectedClient.clientid;
+			const selecteduserclientid = newValue.clientid;
+			if (selectedclientid === selecteduserclientid) {
+				this.setState({
+					selectedUser: ''
+				});
+				swal(`Assigning diary yourself is not allowed`, { icon: 'warning' });
+			} else {
+				this.setState({
+					selectedUser: newValue
+				});
+			}
+		} else {
+			this.setState({
+				searchUserList: []
+			});
+		}
+	};
+===================
+<FormControl
+												variant="outlined"
+												className="flex flex-col input-placeholder"
+												style={{ width: '100%' }}
+											>
+												<Autocomplete
+													name="selectedUser"
+													value={selectedUser}
+													options={searchUserList}
+													// getOptionLabel={option => {
+													// 	if (option.name !== false) {
+													// 		return option.name || '';
+													// 	}
+													// 	return '';
+													// }}
+
+													getOptionLabel={option =>
+														option.firstname && option.firstname !== ''
+															? `${option.firstname} ${option.lastname}`
+															: option.companyname && option.companyname !== ''
+															? `${option.companyname}`
+															: option.name && option.name !== '' && option.name !== null
+															? `${option.name}`
+															: ''
+													}
+													onChange={(event, newValue) => {
+														this.handleSelectedUserChange(newValue);
+													}}
+													onKeyUp={this.onSearchUser}
+													size="small"
+													fullWidth
+													disabled={this.state.viewData}
+													renderInput={params => (
+														<TextValidator
+															{...params}
+															// style={{ height: 49, width: '100%', marginBottom: 10, borderRadius: '0px' }}
+															label="User *"
+															variant="outlined"
+															validators={selectedUser === '' ? ['required'] : []}
+															errorMessages={
+																selectedUser === '' ? ['This field is required'] : []
+															}
+															InputProps={{
+																...params.InputProps,
+																classes: {
+																	notchedOutline: classes.notchedOutline,
+																	root: classes.cssOutlinedInput,
+																	focused: classes.cssFocused
+																}
+															}}
+															InputLabelProps={{
+																classes: {
+																	root: classes.cssLabel,
+																	focused: classes.cssFocused
+																}
+															}}
+														/>
+													)}
+												/>
+											</FormControl>
+                      
+                      =============
+                      
+                      
+                      
+const mapStateToProps = state => ({
+	userid: state.auth.user.data.userid,
+	permissiondata: state.auth,
+	systemfields: state.CommonReducer.systemfields
