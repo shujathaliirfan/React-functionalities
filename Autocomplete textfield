@@ -1,0 +1,138 @@
+state = {
+
+clientAdjustors: [],
+			clientAdjustorid: '',
+      
+      }
+      
+      ==================
+      
+      	static getDerivedStateFromProps(props, state) {
+		if (props.clients && props.systemfields) {
+    
+    const clientdata = props.roles && props.roles.filter(i => i.rolename === 'Client');
+			return {
+			
+			
+
+				clientAdjustors:
+					props.clients &&
+					props.clients.filter(
+						i => i.roles && i.roles.toString().toLowerCase().split(',').includes('client adjuster')
+					),
+          clients:
+					props.clients &&
+					clientdata.length &&
+					props.clients.filter(
+						i => i.roleid && i.roleid.toString().toLowerCase().split(',').includes(clientdata[0].roleid)
+					),
+    
+    
+    }
+    }
+      
+      
+      
+      
+      {iseditclaim && (
+											<FormControl
+												variant="outlined"
+												className="mb-16 flex flex-col input-placeholder ml-10"
+												style={{ width: '100%' }}
+											>
+												<Autocomplete
+													name="clientAdjustorid"
+													value={clientAdjustorid}
+													options={clientAdjustors && clientAdjustors}
+													// disabled={isLocked}
+													getOptionLabel={option =>
+														option.firstname &&
+														option.firstname !== null &&
+														option.firstname !== ''
+															? `${option.firstname} ${option.lastname}`
+															: option.companyname &&
+															  option.companyname !== null &&
+															  option.companyname !== ''
+															? `${option.companyname}`
+															: ''
+													}
+													// renderOption={option => (
+													// 	<>
+													// 		{option.firstname &&
+													// 		option.firstname !== null &&
+													// 		option.firstname !== ''
+													// 			? `${option.firstname} ${option.lastname}`
+													// 			: option.companyname !== ''
+													// 			? `${option.companyname}`
+													// 			: ''}
+													// 	</>
+													// )}
+													onBlur={this.handlecreatefields}
+													onChange={(event, newValue) => {
+														console.log(newValue);
+														this.setState({
+															clientAdjustorid: newValue != null ? newValue : ''
+															// clientAdjustorIdError: validateClientAdjustorId(newValue)
+														});
+													}}
+													fullWidth
+													size="small"
+													renderInput={params => (
+														<TextField
+															{...params}
+															// label="Carrier Name(Carrier Id) *"
+															label="Choose Client Adjuster "
+															variant="outlined"
+															// autoFocus
+															// error={clientAdjustorIdError}
+															// helperText={clientAdjustorIdError}
+															InputProps={{
+																...params.InputProps,
+																classes: {
+																	notchedOutline: classes.notchedOutline,
+																	root: classes.cssOutlinedInput,
+																	focused: classes.cssFocused,
+																	disabled: classes.cssdisabled
+																}
+															}}
+															InputLabelProps={{
+																classes: {
+																	root: classes.cssLabel,
+																	focused: classes.cssFocused
+																}
+															}}
+														/>
+													)}
+												/>
+											</FormControl>
+										)}
+                    
+                    
+                    
+                    
+                    
+                    ============ claimvalidation.js =====================
+                    
+                    export const validateClientAdjustorId = id => {
+	// console.log(id);
+	let status = '';
+	if (id && id !== null && id !== '') {
+		status = '';
+	} else {
+		status = 'Select any value';
+	}
+	console.log(id, status);
+	return status;
+};
+
+
+
+const mapStateToProps = state => ({
+	clients: state.CommonReducer.clients,
+	systemfields: state.CommonReducer.systemfields,
+	metadata: state.CommonReducer.metadata,
+	userid: state.auth.user.data.userid,
+	permissiondata: state.auth,
+	roles: state.CommonReducer.roles
+});
+export default withRouter(withStyles(styles)(connect(mapStateToProps, {})(ClaimInfo)));
