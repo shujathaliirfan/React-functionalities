@@ -15,3 +15,11 @@ CREATE TABLE users (
     tokentype VARCHAR DEFAULT NULL,
     PRIMARY KEY (userid)  
 ); 
+CREATE TABLE useraddresses (
+	userid uuid DEFAULT NULL,
+	addressid uuid NOT NULL,
+	clientid uuid DEFAULT NULL, 
+	CONSTRAINT "fk_userid_users_userid_useraddresses" FOREIGN KEY ("userid") REFERENCES "users" ("userid"),
+   CONSTRAINT "fk_clientid_clients_clientid_useraddresses" FOREIGN KEY ("clientid") REFERENCES "clients" ("clientid"),
+   CONSTRAINT "fk_addressesid_addresses_addressid_useraddresses" FOREIGN KEY ("addressid") REFERENCES "addresses" ("addressid")
+);
