@@ -1,0 +1,17 @@
+CREATE TABLE users (  
+    userid uuid DEFAULT uuid_generate_v4 (),  
+    email VARCHAR NOT NULL UNIQUE,  
+    password VARCHAR NOT NULL,  
+    firstname VARCHAR NOT NULL,  
+    lastname VARCHAR,  
+    isactive BOOLEAN,
+    isactivated BOOLEAN,
+    isdeleted BOOLEAN,
+    createddate TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    createdby VARCHAR,
+    modifieddate TIME DEFAULT NUll,
+    modifiedby VARCHAR DEFAULT NUll,
+    tokenused BOOLEAN DEFAULT NULL,
+    tokentype VARCHAR DEFAULT NULL,
+    PRIMARY KEY (userid)  
+); 
