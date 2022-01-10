@@ -1,0 +1,492 @@
+/* eslint-disable jsx-a11y/label-has-associated-control */
+/* eslint-disable func-names */
+
+import React from 'react';
+import { Button, Checkbox, Dialog, FormControl, TextField } from '@material-ui/core';
+import FormControlLabel from '@material-ui/core/FormControlLabel';
+import { withStyles } from '@material-ui/styles';
+import Alert from '@material-ui/lab/Alert';
+import FileCopyIcon from '@material-ui/icons/FileCopy';
+import Autocomplete from '@material-ui/lab/Autocomplete';
+import axios from 'axios';
+import { FileDrop } from 'react-file-drop';
+import Backdrop from '@material-ui/core/Backdrop';
+import swal from 'sweetalert';
+import { ValidatorForm, TextValidator } from 'react-material-ui-form-validator';
+import CircularProgress from '@material-ui/core/CircularProgress';
+import styles from '../../../useStyles/materialUIControls';
+import Settings from '../../../../../config/globalConfig';
+import './addReport.css';
+
+const apiUrl = Settings.API_ROOT;
+
+class AddReport extends React.Component {
+	constructor(props) {
+		super(props);
+
+		this.state = {
+			DailogOpen: props.open,
+			systemFieldData: [],
+			uploadDocuments: [],
+			loader: false,
+			largerSizeFilenames: [],
+			fileFlag: false,
+			disabelUploadBtn: false,
+			// uploadedby: props.user.user.data.userid,
+			createdby: props.user.user.data.userid,
+			showClient: false
+		};
+	}
+
+	componentDidMount() {
+		this.getSystemFields();
+		console.log(this.props.updateData, 'this.props');
+	}
+
+	static getDerivedStateFromProps(props, state) {
+		return {
+			DailogOpen: props.open
+		};
+	}
+
+	getBase64 = async file => {
+		return new Promise((resolve, reject) => {
+			const reader = new FileReader();
+			reader.readAsDataURL(file);
+			reader.onload = () => resolve(reader.result);
+			reader.onerror = error => reject(error);
+		});
+	};
+
+	fileUpload = filesSelected => {
+		console.log(this.props);
+		const { createdby, showClient } = this.state;
+		this.setState({ largerSizeFilenames: [], fileFlag: false });
+		for (let i = 0; i < filesSelected.length; i += 1) {
+			const fsize = filesSelected[i].size;
+			const fileSize = Math.round(fsize / 1024);
+			let fileBuffer;
+			const fileName = filesSelected[i].name;
+			const documentname = filesSelected[i].name;
+			const fileType = filesSelected[i].type;
+
+			if (fileSize < 250000) {
+				this.getBase64(filesSelected[i]).then(data => {
+					if (i === filesSelected.length - 1) {
+						document.getElementById('reportFileUpload').value = '';
+					}
+					if (data !== undefined) {
+						fileBuffer = data;
+						const base64File = data.split(',');
+						if (this.props.isClient) {
+							this.setState(prevState => ({
+								uploadDocuments: [
+									...prevState.uploadDocuments,
+									{
+										clientid: this.props.clientid,
+										fileName,
+										documentname,
+										description: '',
+										documenttype: '',
+										file: base64File[1],
+										source: 'Manual',
+										fileType,
+										createdby
+									}
+								]
+							}));
+						} else if (this.props.isClaim) {
+							this.setState(prevState => ({
+								uploadDocuments: [
+									...prevState.uploadDocuments,
+									{
+										claimid: this.props.claimid,
+										fileName,
+										documentname,
+										description: '',
+										documenttype: '',
+										file: base64File[1],
+										source: 'Manual',
+										fileType,
+										createdby,
+										isclient: showClient
+									}
+								]
+							}));
+						}
+					}
+				});
+			} else {
+				this.setState(prevState => ({
+					largerSizeFilenames: [
+						...prevState.largerSizeFilenames,
+						{
+							fileName
+						}
+					]
+				}));
+				console.log('greater than 250mb');
+			}
+		}
+	};
+
+	getSystemFields = () => {
+		axios
+			.get(`${apiUrl}/api/clients/metadata/all`)
+			.then(response => response.data)
+			.then(result => {
+				const document = result.data.systemfields.filter(x => x.fieldname === 'Document Type');
+				console.log(document);
+				this.setState({ systemFieldData: document });
+			});
+	};
+
+	handleChange = (e, item, index) => {
+		e.preventDefault();
+		const { uploadDocuments } = this.state;
+		const result = uploadDocuments;
+		result[index].description = e.target.value;
+		this.setState({ uploadDocuments: result });
+	};
+
+	handleAutoSave = (newValue, item, index) => {
+		const { uploadDocuments } = this.state;
+		const result = uploadDocuments;
+		result[index].documenttype = newValue;
+		this.setState({ uploadDocuments: result });
+	};
+
+	onSubmit = e => {
+		e.preventDefault();
+		const { uploadDocuments } = this.state;
+		if (uploadDocuments.length > 0) {
+			console.log(uploadDocuments);
+			this.setState({ loader: true, fileFlag: false, disabelUploadBtn: true });
+			if (this.props.isClient) {
+				axios
+					.post(`${apiUrl}/api/clients/createreport`, uploadDocuments)
+					.then(response => response.data)
+					.then(result => {
+						this.props.getClientReports();
+						swal(`Reports uploaded successfully`, { icon: 'success' });
+						this.props.closePop();
+						this.setState({
+							uploadDocuments: [],
+							loader: false,
+							largerSizeFilenames: [],
+							disabelUploadBtn: false
+						});
+					});
+			} else if (this.props.isClaim) {
+				axios
+					.post(`${apiUrl}/api/claim/report/create`, uploadDocuments)
+					.then(response => response.data)
+					.then(result => {
+						this.props.getReports();
+						swal(`Reports uploaded successfully`, { icon: 'success' });
+						this.props.closePop();
+						this.setState({
+							uploadDocuments: [],
+							loader: false,
+							largerSizeFilenames: [],
+							disabelUploadBtn: false
+						});
+					});
+			}
+		} else {
+			this.setState({ fileFlag: true });
+		}
+	};
+
+	handleCancel = () => {
+		this.props.closePop();
+		this.setState({ uploadDocuments: [], fileFlag: false });
+	};
+
+	removeFile = (row, rowIndex) => {
+		this.setState(prevState => ({
+			uploadDocuments: prevState.uploadDocuments.filter((file, index) => index !== rowIndex)
+		}));
+	};
+
+	closeLoader = () => {
+		this.setState({ loader: false });
+	};
+
+	handleisClient = e => {
+		this.setState({
+			showClient: e.target.checked
+		});
+	};
+
+	render() {
+		console.log(this.state.client, 'clientt');
+		const {
+			DailogOpen,
+			systemFieldData,
+			fileFlag,
+			uploadDocuments,
+			loader,
+			disabelUploadBtn,
+			largerSizeFilenames,
+			showClient
+		} = this.state;
+		const { classes } = this.props;
+		return (
+			<Dialog
+				fullWidth
+				maxWidth="sm"
+				anchorReference="anchorPosition"
+				anchorPosition={{ top: 400, left: 900 }}
+				anchorOrigin={{
+					vertical: 'bottom',
+					horizontal: 'right'
+				}}
+				classes={{
+					root: classes.dailog,
+					paper: classes.dailog
+				}}
+				transformOrigin={{
+					vertical: 'center',
+					horizontal: 'center'
+				}}
+				open={DailogOpen}
+			>
+				<div className="selectHead" style={{ minHeight: '430px', maxHeight: '530px', width: '100%' }}>
+					<Backdrop className={classes.backdrop} open={loader}>
+						<CircularProgress
+							color="inherit"
+							style={{
+								color: '#7F7F7F',
+								border: '10px solid #A71C20',
+								borderBottomColor: '#3C4B64',
+								borderRadius: '50%'
+							}}
+						/>
+						<h3 style={{ fontWeight: 'bold', marginLeft: '20px' }}>Uploading your files please wait....</h3>
+					</Backdrop>
+					<h1
+						style={{
+							textAlign: 'left',
+							paddingTop: '25px',
+							paddingBottom: '25px',
+							paddingLeft: '20px'
+						}}
+					>
+						Upload Claim Document
+					</h1>
+					<div
+						style={{
+							border: '1px solid #E5E5E5',
+							borderLeft: 'none',
+							borderRight: 'none',
+							borderBottom: 'none'
+						}}
+					>
+						<div style={{ padding: '20px' }}>
+							<Alert severity="info"> Individual files must not be larger than 250MB.</Alert>
+							{fileFlag ? (
+								<Alert severity="error" className="mt-16" autoFocus>
+									Please Upload atleast one file
+								</Alert>
+							) : (
+								''
+							)}
+							{largerSizeFilenames.map((item, index) => (
+								<Alert severity="error" className="mt-16">
+									<span style={{ fontWeight: 'bold' }}>{item.fileName}</span> - Individual files must
+									not be larger than 250MB.
+								</Alert>
+							))}
+
+							<FileDrop multiple onDrop={(files, event) => this.fileUpload(files, event)}>
+								<div style={{ cursor: 'pointer' }}>
+									<label htmlFor="reportFileUpload">
+										<div style={{ display: 'flex' }}>
+											<FileCopyIcon style={{ fontSize: '9rem' }} />
+											<h2>
+												<div>Click here to upload your files</div>
+												<div>Or</div>
+												<div>Drag your files here</div>
+											</h2>
+										</div>
+									</label>
+								</div>
+							</FileDrop>
+							<div className="flex  vertical">
+								<FormControlLabel
+									// style={{ marginLeft: '12px' }}
+									control={
+										<Checkbox
+											checked={showClient}
+											// onChange={() => this.setState({ showClient: !showClient })}
+											onChange={this.handleisClient}
+											name="client"
+											size="medium"
+										/>
+									}
+									label="Client"
+								/>
+							</div>
+
+							<div style={{ marginTop: '20px', marginBottom: '20px' }}>
+								<input
+									style={{ display: 'none' }}
+									onChange={() => {
+										const filesSelected = document.getElementById('reportFileUpload').files;
+										this.fileUpload(filesSelected);
+									}}
+									id="reportFileUpload"
+									multiple
+									type="file"
+								/>
+							</div>
+							<ValidatorForm onSubmit={this.onSubmit}>
+								{uploadDocuments.map((item, index) => (
+									<div
+										style={{
+											border: '1px solid #E5E5E5',
+											marginBottom: '10px',
+											padding: '10px'
+										}}
+									>
+										<div style={{ display: 'inline' }}>
+											<span style={{ color: '#545CD8', fontSize: '14px' }}>FileName</span>
+											<span style={{ color: '#63D695', fontSize: '13px' }}>:{item.fileName}</span>
+											<button
+												type="button"
+												onClick={() => {
+													this.removeFile(item, index);
+												}}
+												style={{ float: 'right', fontSize: '24px', marginRight: '10px' }}
+											>
+												<i className="material-icons red" title="Delete File">
+													delete
+												</i>
+											</button>
+										</div>
+										<div className="flex mt-16">
+											<div style={{ flexBasis: '49%' }}>
+												<TextValidator
+													className="mb-16 flex flex-col  ml-16 input-placeholder"
+													label="Description *"
+													name="description"
+													autoFocus
+													value={item.description}
+													size="small"
+													style={{ width: '95%' }}
+													type="text"
+													validators={['required']}
+													errorMessages={['This field is required']}
+													onChange={e => this.handleChange(e, item, index)}
+													variant="outlined"
+													fullWidth
+													InputProps={{
+														classes: {
+															notchedOutline: classes.notchedOutline,
+															root: classes.cssOutlinedInput,
+															focused: classes.cssFocused,
+															disabled: classes.cssdisabled
+														}
+													}}
+													InputLabelProps={{
+														classes: {
+															root: classes.cssLabel,
+															focused: classes.cssFocused
+														}
+													}}
+												/>
+											</div>
+											<div style={{ flexBasis: '49%' }}>
+												<FormControl
+													variant="outlined"
+													className="mb-16 ml-16 flex flex-col input-placeholder"
+													style={{ width: '95%' }}
+												>
+													<Autocomplete
+														name="documenttype"
+														value={item.documenttype}
+														options={systemFieldData}
+														getOptionLabel={option => option.fieldsubtype}
+														renderOption={option => option.fieldsubtype}
+														onChange={(event, newValue) => {
+															this.handleAutoSave(newValue, item, index);
+														}}
+														fullWidth
+														size="small"
+														renderInput={params => (
+															<TextValidator
+																{...params}
+																label="Document Type *"
+																variant="outlined"
+																validators={
+																	item.documenttype === '' ? ['required'] : []
+																}
+																errorMessages={
+																	item.documenttype === '' ? ['required'] : []
+																}
+																InputProps={{
+																	...params.InputProps,
+																	classes: {
+																		notchedOutline: classes.notchedOutline,
+																		root: classes.cssOutlinedInput,
+																		focused: classes.cssFocused,
+																		disabled: classes.cssdisabled
+																	}
+																}}
+																InputLabelProps={{
+																	classes: {
+																		root: classes.cssLabel,
+																		focused: classes.cssFocused
+																	}
+																}}
+															/>
+														)}
+													/>
+												</FormControl>
+											</div>
+										</div>
+									</div>
+								))}
+
+								<div className="flex flex-row justify-center mb-16">
+									<Button
+										style={{ marginRight: '20px' }}
+										variant="contained"
+										color="primary"
+										className="w-180 mb-16 flex btn-shadow btn-outline-primary justify-center"
+										aria-label="Register"
+										value="selctLossTypes"
+										disabled={disabelUploadBtn}
+										type="submit"
+									>
+										Upload
+									</Button>
+
+									<Button
+										variant="contained"
+										color="primary"
+										style={{
+											marginRight: '20px',
+											backgroundColor: 'white',
+											outline: '1px solid #E5E5E5',
+											color: 'black',
+											borderRadius: '0px'
+										}}
+										className="w-180 mb-16 flex btn-shadow btn-outline-primary justify-center"
+										aria-label="Register"
+										type="button"
+										onClick={this.handleCancel}
+									>
+										Cancel
+									</Button>
+								</div>
+							</ValidatorForm>
+						</div>
+					</div>
+				</div>
+			</Dialog>
+		);
+	}
+}
+export default withStyles(styles)(AddReport);
