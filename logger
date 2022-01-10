@@ -1,0 +1,100 @@
+var appRoot = require('app-root-path');
+var winston = require('winston');
+require('winston-daily-rotate-file');
+
+
+var transport = new winston.transports.DailyRotateFile({
+  filename: `RyzeClaims_%DATE%.log`,
+  dirname:`${appRoot}/logs/`,
+  datePattern: 'MM-DD-YYYY',
+  zippedArchive: true,
+  maxSize: '500m',
+  maxFiles: '30d',
+  colorize:true,   
+  format: winston.format.combine(   
+        winston.format.timestamp(),
+        winston.format.printf((info) => {
+          if(info.username===undefined)
+          {
+            info.username="NA"
+          }        
+          return `{"DateTime":"${new Date(info.timestamp).toLocaleString()}","Level":"${info.level}","Username":"${info.username}","Module":"${info.reqdetails}","Message": "${info.message}"}`;
+        }),
+       
+      )
+    
+})
+
+var eventtransport = new winston.transports.DailyRotateFile({
+  filename: `RyzeClaims_%DATE%.log`,
+  dirname:`${appRoot}/events/`,
+  datePattern: 'MM-DD-YYYY',
+  zippedArchive: true,
+  maxSize: '500m',
+  maxFiles: '30d',
+  colorize:true,   
+  format: winston.format.combine(   
+        winston.format.timestamp(),
+        winston.format.printf((info) => {            
+          return `{"DateTime":"${new Date(info.timestamp).toLocaleString()}","Level":"${info.level?info.level:"NA"}","Module":"${info.reqdetails?info.reqdetails:"NA"}","Message": "${info.message?info.message:"NA"}","ClaimEventType":"${info.ClaimEventType?info.ClaimEventType:"NA"}","EventNotificationType":"${info.EventNotificationType?info.EventNotificationType:"NA"}","Reason":${info.Reason?info.Reason:"NA"},"CLAIMNO":${info.Claimno?info.Claimno:"NA"},"IsClaimCreated":${info.isClaimCreated?info.isClaimCreated:"NA"}}`;
+        }),
+       
+      )
+    
+})
+
+// instantiate a new Winston Logger with the settings defined above
+var logger = new winston.createLogger({
+  transports: [
+    // new winston.transports.File(options.file)    
+    transport
+  ],
+  exitOnError: false, // do not exit on handled exceptions
+});
+
+
+var eventlogger = new winston.createLogger({
+  transports: [
+    // new winston.transports.File(options.file)    
+    eventtransport
+  ],
+  exitOnError: false, // do not exit on handled exceptions
+});
+
+// create a stream object with a 'write' function that will be used by `morgan`
+logger.stream = {
+  write: function(message, encoding) {
+    // use the 'info' log level so the output will be picked up by both transports (file and console)
+    logger.info(message);
+  },
+};
+
+eventlogger.stream = {
+  write: function(message, encoding) {
+    // use the 'info' log level so the output will be picked up by both transports (file and console)
+    eventlogger.info(message);
+  },
+};
+
+
+
+module.exports = {logger,eventlogger};
+
+
+
+
+
+
+
+
+============
+
+const { logger } = require("../../config/winstonlog");
+logger.info("Invoice systemfields Sent Sucessfully", {
+      username: res.locals.username,
+      reqdetails: "Clients",
+    });
+logger.error(`There is some issue in the server- ${error.message}`, {
+      username: res.locals.username,
+      reqdetails: 'Claims',
+    });
