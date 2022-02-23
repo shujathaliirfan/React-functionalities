@@ -45,6 +45,23 @@ exports.send_invoicemail = async (req, res, next) => {
     }
 
 
+or else directly convert attachmentlink into buffer and buffer into base 64 instaead of storing in a folder
+
+ let base64data;
+
+      if (attachmentLink) {
+         const response = await realaxiosinstance.get(attachmentLink, {
+            responseType: "arraybuffer",
+            responseEncoding: "binary",
+            headers: {
+               "Content-Type": "application/pdf",
+            },
+         });
+         base64data = Buffer.from(response.data).toString("base64");
+      }
+      
+      ====================
+
 
 
 
