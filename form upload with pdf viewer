@@ -1,0 +1,1439 @@
+/* eslint-disable jsx-a11y/label-has-associated-control */
+import React from 'react';
+import axios from 'axios';
+import _ from '@lodash';
+import { connect } from 'react-redux';
+import { Helmet } from 'react-helmet';
+import { AgGridReact } from '@ag-grid-community/react';
+import { AllCommunityModules } from '@ag-grid-community/all-modules';
+import '@ag-grid-community/all-modules/dist/styles/ag-grid.css';
+import '@ag-grid-community/all-modules/dist/styles/ag-theme-balham.css';
+import '@ag-grid-community/all-modules/dist/styles/ag-theme-balham-dark.css';
+import { withRouter } from 'react-router-dom';
+import Tooltip from '@material-ui/core/Tooltip';
+import moment from 'moment';
+import OpenInNewIcon from '@material-ui/icons/OpenInNew';
+import DocViewer, { DocViewerRenderers, PDFRenderer, PNGRenderer, JPGRenderer } from 'react-doc-viewer';
+// eslint-disable-next-line import/no-duplicates
+import { Button, Dialog } from '@material-ui/core';
+import { withStyles } from '@material-ui/styles';
+import DialogContent from '@material-ui/core/DialogContent';
+import GetAppIcon from '@material-ui/icons/GetApp';
+import PanToolIcon from '@material-ui/icons/PanTool';
+import CloseIcon from '@material-ui/icons/Close';
+import CheckIcon from '@material-ui/icons/Check';
+import TextField from '@material-ui/core/TextField';
+import InputAdornment from '@material-ui/core/InputAdornment';
+import Icon from '@material-ui/core/Icon';
+import swal from 'sweetalert';
+import Snackbar from '@material-ui/core/Snackbar';
+import MuiAlert from '@material-ui/lab/Alert';
+// eslint-disable-next-line import/no-duplicates
+import { Checkbox, FormControl } from '@material-ui/core';
+import FormControlLabel from '@material-ui/core/FormControlLabel';
+
+import FileCopyIcon from '@material-ui/icons/FileCopy';
+import Autocomplete from '@material-ui/lab/Autocomplete';
+import { FileDrop } from 'react-file-drop';
+import Backdrop from '@material-ui/core/Backdrop';
+import { ValidatorForm, TextValidator } from 'react-material-ui-form-validator';
+import CircularProgress from '@material-ui/core/CircularProgress';
+import Settings from '../../../config/globalConfig';
+import Customtooltip from './Customtooltip';
+import GridDocumentType from './AgGridCellRenderers/griddocumenttype';
+import MultipleUserAssignment from './MultipleUserAssignment';
+import BackdropLoader from '../components/BackdropLoader';
+
+import styles from '../useStyles/materialUIControls';
+import './DataEntry.css';
+
+const apiUrl = Settings.API_ROOT;
+function Alert(props) {
+	return <MuiAlert elevation={6} variant="filled" {...props} />;
+}
+
+let iframeSrc = '';
+let getExt = '';
+class DataEntry extends React.PureComponent {
+	constructor(props) {
+		super(props);
+		this.state = {
+			showHideAdd: true,
+			showHideDelete: true,
+			showHideEdit: true,
+			showHideView: true,
+			showHideList: true,
+			showHideAddReports: false,
+			pdfDoc: [],
+			openFrame: false,
+			filename: '',
+			fileurl: '',
+			isLocked: false,
+			frameworkComponents: {
+				Customtooltip,
+				griddocumenttype: GridDocumentType
+			},
+
+			DailogOpen: false,
+			systemFieldData: [],
+			uploadDocuments: [],
+			loader: false,
+			largerSizeFilenames: [],
+			fileFlag: false,
+			disabelUploadBtn: false,
+			createdby: this.props.userid,
+			examiners: [],
+			sourcetype: '',
+			AssignOpenDialog: false,
+			ryzeFileNumber: '',
+			ryzeFileNumberError: false,
+			ryzeFileNumberErrorText: '',
+			assignClaimData: {},
+
+			// eslint-disable-next-line react/no-unused-state
+			documenttypelist: [],
+			// eslint-disable-next-line react/no-unused-state
+			userid: '',
+			// eslint-disable-next-line react/no-unused-state
+			clientid: '',
+			// eslint-disable-next-line react/no-unused-state
+			roles: '',
+
+			// showForOtherTab: true,
+			modules: AllCommunityModules,
+			overlayNoRowsTemplate:
+				'<div class="ag-overlay-loading-top text-center"><p>No Records Found  </p><div class="loaderr"></div></div></div>',
+			overlayLoadingTemplate:
+				'<div class="ag-overlay-loading-top text-center mt-40"><p>Please wait while loading</p><div class="loader5"></div></div></div>',
+			columnDefs: [
+				{
+					headerName: '',
+					field: 'checkbox',
+					width: 3,
+					headerCheckboxSelection: true,
+					checkboxSelection: true
+				},
+				{
+					headerName: 'File',
+					field: 'fileurl',
+					sortable: true,
+					width: 35,
+					// eslint-disable-next-line consistent-return
+					cellRenderer: params => {
+						if (params.data.fileurl !== null) {
+							const urlString = params.data.fileurl.toString().split('/');
+							const res = urlString[4].replace('-', '/');
+							const out = res.split('/');
+
+							const link = document.createElement('a');
+							link.className = 'atag';
+							link.innerHTML = `<a href="#">${`${out[1]}`}</a>`;
+							link.addEventListener('click', e => {
+								e.preventDefault();
+								setTimeout(() => {
+									this.docInIframe(params.data);
+								}, 500);
+							});
+							return link;
+						}
+					}
+				},
+				{
+					headerName: 'Received Date',
+					field: 'receiveddate',
+					sortable: true,
+					sort: 'desc',
+					width: 30,
+					valueGetter(params) {
+						return moment(params.data.receiveddate).format('MM-DD-YYYY');
+					}
+				},
+				{
+					headerName: 'Assigned Date',
+					field: 'assigneddate',
+					sortable: true,
+					width: 30,
+					valueGetter(params) {
+						return moment(params.data.assigneddate).isValid()
+							? moment(params.data.assigneddate).format('MM-DD-YYYY')
+							: '';
+					}
+				},
+				{
+					headerName: 'User Assignment',
+					field: 'icon',
+					width: 55,
+					lockPosition: false,
+					cellRenderer: 'griddocumenttype',
+					// sortable:true,
+					// sortingOrder:'asc',
+					cellRendererParams: params => {
+						// if(params.data.sourcename === 'Manual'){
+						params.data.examiners = this.state.examiners;
+						params.data.getData = this.getDataEntryList;
+
+						// }
+
+						// params.data.showHideEditDcumentType = this.state.showHideEditDcumentType;
+
+						// if (params.data.userassignment !== null || params.data.userassignment === '') {
+						// 	const reviewData = this.state.examiners.filter(
+						// 		x => x.clientid === params.data.userassignment
+						// 	);
+
+						// 	const aaa = reviewData;
+						// 	return reviewData;
+						// }
+						// return null;
+					}
+				},
+				{
+					headerName: 'Source',
+					field: 'sourcename',
+					sortable: true,
+					width: 25
+				},
+				{
+					headerName: 'Reason',
+					field: 'rejectreason',
+					sortable: true,
+					width: 45,
+					tooltipField: 'rejectreason'
+				},
+				{
+					headerName: 'Is Claim Created',
+					field: 'icon',
+					width: 20,
+					lockPosition: false,
+					cellRenderer: params => {
+						const link = document.createElement('div');
+						const link1 = document.createElement('p');
+						if (params.data.sourcename === 'Manual' || params.data.sourcename === 'Email') {
+							if (params.data.ryzefilenumber === null || params.data.ryzefilenumber === '') {
+								link.className = 'dataentry entrylineheight';
+								const btn = document.createElement('span');
+								const btn2 = document.createElement('span');
+								const sep = document.createElement('div');
+								btn.className = `dataentry_span`;
+								btn.innerHTML = '<a>Assign Claim</a>';
+								btn.addEventListener('click', async e => {
+									e.preventDefault();
+									this.setState({
+										AssignOpenDialog: true,
+										assignClaimData: params.data
+									});
+								});
+								btn2.className = `dataentry_span`;
+								btn2.innerHTML = '<a>Add a Claim</a>';
+								btn2.addEventListener('click', async e2 => {
+									e2.preventDefault();
+									//	await this.updateclaim(params.data);
+									await this.additem(params.data);
+								});
+								link.append(btn);
+								link.append(sep);
+								link.append(btn2);
+							} else {
+								link.className = 'dataentry';
+								link.innerHTML = `<span>Yes - </span><span><a> [ ${params.data.ryzefilenumber} ] </a></span>`;
+								link.addEventListener('click', async e => {
+									e.preventDefault();
+									await this.updateclaim(params.data);
+								});
+							}
+
+							return link;
+						}
+
+						if (params.data.claimid === null) {
+							link.className = 'dataentry';
+
+							if (this.state.showHideEdit) {
+								link.innerHTML = '<span>No </span><span><a>- Add a Claim</a></span>';
+								link.addEventListener('click', async e => {
+									e.preventDefault();
+									await this.addaclaim(params.data.claimdata, params.data.dataentryid);
+								});
+							}
+							return link;
+						}
+
+						// else {
+						// 	console.log('sdf')
+						// }
+
+						// const link = document.createElement('div');
+						// link.className = 'claimlink';
+						// if (this.state.showHideEdit) {
+						// 	link.innerHTML = `<span>Yes</span><span>[${params.data.ryzefilenumber}]</span>`;
+						// }
+						return link;
+					}
+				},
+				{
+					headerName: 'Actions',
+					field: 'icon',
+					width: 10,
+					// lockPosition: false,
+					cellRenderer: params => {
+						const link = document.createElement('div');
+						link.className = 'trans';
+						const btn2 = document.createElement('BUTTON');
+						if (params.data.claimid !== null) {
+							btn2.innerHTML = `<Tooltip title="Remove from list" placement="bottom"><p><span class="delete"><i class="material-icons red">delete</i></span></p></Tooltip >`;
+
+							btn2.addEventListener('click', e2 => {
+								e2.preventDefault();
+								swal({
+									title: 'Are you sure?',
+									text: `Do you want to delete this Claim?`,
+									buttons: ['Cancel', 'Yes'],
+									dangerMode: true
+								}).then(willDelete => {
+									if (willDelete) {
+										this.handleDelete(params.data.claimid);
+									} else {
+										swal(`Sorry Unable To Delete  The Claim`);
+									}
+								});
+							});
+						}
+
+						link.append(btn2);
+						return link;
+					}
+				}
+			],
+			defaultColDef: {
+				resizable: true,
+				domLayout: 'autoHeight',
+				tooltipComponent: 'Customtooltip',
+				sortingOrder: ['desc', 'asc']
+			},
+			rowSelection: 'multiple',
+			rowData: [],
+			paginationPageSize: 25,
+			infoopen: false,
+			infomsg: '',
+			horizontal: 'right',
+			selectedRows: [],
+			updatingAssignments: false
+		};
+		this.onQuickFilterChanged = this.onQuickFilterChanged.bind(this);
+	}
+
+	componentDidMount() {
+		const pData = [...this.props.permissiondata.user.permission];
+		if (pData !== undefined || pData !== null) {
+			const getModuleData = pData.filter(f => f.modulename === 'Data Entry');
+			this.permissionValidator(getModuleData);
+		}
+		console.log(this.state.examiners, 'examiners');
+
+		this.getDataEntryList();
+		this.getSystemFields();
+	}
+
+	static getDerivedStateFromProps(props, state) {
+		if (props.systemfields) {
+			return {
+				examiners:
+					props.clients &&
+					props.clients.filter(
+						i => i.roles && i.roles.toString().toLowerCase().split(',').includes('examiner')
+					),
+				sourcetype:
+					props.systemfields &&
+					props.systemfields
+						.filter(i => i.fieldname.toString().toLowerCase() === 'source type')
+						.filter(x => x.fieldsubtype.toString().toLowerCase() === 'manual')[0]?.systemfieldid,
+
+				userid: props.userid,
+				clientid: props.clientid,
+				roles: props.roles
+			};
+		}
+		return null;
+	}
+
+	onGridReady = params => {
+		this.gridApi = params.api;
+		this.gridColumnApi = params.columnApi;
+		this.gridApi.showLoadingOverlay();
+		this.gridApi.sizeColumnsToFit();
+		window.onresize = () => {
+			this.gridApi.sizeColumnsToFit();
+		};
+		this.gridApi.setDomLayout('autoHeight');
+		document.querySelector('#myGrid').style.height = '';
+	};
+
+	onQuickFilterChanged() {
+		this.gridApi.setQuickFilter(document.getElementById('quickFilter').value);
+	}
+
+	addaclaim = async (claimdataset, dataentryid) => {
+		const params = {
+			claimdata: claimdataset,
+			dataentryid
+		};
+		const response = await axios.post(`${apiUrl}/api/dataentry/createclaim`, params);
+		const responsedata = await response.data;
+		const { status, ryzefileno, message } = responsedata;
+		console.log(status, ' Status of the Data');
+		if (status) {
+			swal(`${ryzefileno} ${message}`, { icon: 'success' }).then(value => {
+				this.getDataEntryList();
+			});
+		} else {
+			swal(`Oops there is some error while creating a claim`, { icon: 'warning' });
+		}
+	};
+
+	getSystemFields = () => {
+		axios
+			.get(`${apiUrl}/api/clients/metadata/all`)
+			.then(response => response.data)
+			.then(result => {
+				const document = result.data.systemfields.filter(x => x.fieldname === 'Document Type');
+				console.log(document);
+				this.setState({ systemFieldData: document });
+			});
+	};
+
+	getDataEntryList = () => {
+		axios
+			.get(`${apiUrl}/api/dataentry/listall`)
+			.then(response => response.data)
+			.then(
+				result => {
+					if (result.data && result.data.length) {
+						this.setState({
+							rowData: result.data
+						});
+					} else {
+						this.gridApi.showNoRowsOverlay();
+						this.setState({
+							rowData: []
+						});
+					}
+				},
+				err => {
+					console.log(err);
+				}
+			);
+	};
+
+	handleDelete = id => {
+		axios
+			.delete(`${apiUrl}/api/dataentry/delete/${id}`)
+			.then(response => response.data)
+			.then(result => {
+				if (result && result.status === 'success') {
+					swal(`Claim has been deleted successfully`);
+					this.getDataEntryList();
+				}
+				err => {
+					console.log(err);
+				};
+			});
+	};
+
+	additem = val => {
+		this.props.history.push(`/createclaim`, {
+			createdataentryclaim: val.dataentryid,
+			iseditclaim: false
+		});
+	};
+
+	updateclaim = val => {
+		this.props.history.push(`/updateclaim`, {
+			claimid: val.claimid,
+			iseditclaim: true
+		});
+	};
+
+	permissionValidator = permissionData => {
+		if (permissionData && permissionData.length > 0) {
+			this.setState({
+				showHideAdd: !!permissionData.find(f => f.submodulename.toString().toLowerCase() === 'add'),
+				showHideEdit: !!permissionData.find(f => f.submodulename.toString().toLowerCase() === 'edit'),
+				showHideDelete: !!permissionData.find(f => f.submodulename.toString().toLowerCase() === 'delete'),
+				showHideView: !!permissionData.find(f => f.submodulename.toString().toLowerCase() === 'view'),
+				showHideList: !!permissionData.find(f => f.submodulename.toString().toLowerCase() === 'list'),
+				showHideAddReports: !!permissionData.find(
+					f => f.submodulename.toString().toLowerCase() === 'add reports'
+				)
+				// showForOtherTab: this.handleCheck(permissionData)
+			});
+		}
+	};
+
+	handleCheck = permissionData => {
+		return permissionData.some(
+			item =>
+				item.submodulename.toString().toLowerCase().replace(/ /g, '').includes('policy') ||
+				item.submodulename.toString().toLowerCase().replace(/ /g, '').includes('reserves&payments') ||
+				item.submodulename.toString().toLowerCase().replace(/ /g, '').includes('notes') ||
+				item.submodulename.toString().toLowerCase().replace(/ /g, '').includes('reports') ||
+				item.submodulename.toString().toLowerCase().replace(/ /g, '').includes('photos') ||
+				item.submodulename.toString().toLowerCase().replace(/ /g, '').includes('invoices')
+		);
+	};
+
+	docInIframe = data => {
+		getExt = data.fileurl.split(/[#?]/)[0].split('.').pop().trim();
+
+		const getFileUrl = data.fileurl.toString().split('/');
+		const res = getFileUrl[4].replace('-', '/');
+		const fileData = res.split('/');
+
+		const fileurlData = data.fileurl;
+
+		if (
+			getExt.toString().toLowerCase() !== 'jpg' ||
+			getExt.toString().toLowerCase() !== 'jfif' ||
+			getExt.toString().toLowerCase() !== 'png'
+		) {
+			iframeSrc =
+				// getExt.toString().toLowerCase() === 'jpg' ||
+				getExt.toString().toLowerCase() === 'pdf' ||
+				getExt.toString().toLowerCase() === 'docx' ||
+				getExt.toString().toLowerCase() === 'doc'
+					? data.fileurl
+					: data.fileurl;
+			const documents = [{ uri: data.fileurl, fileType: getExt }];
+
+			// eslint-disable-next-line react/no-unused-state
+			this.setState({ pdfDoc: documents, filename: `${fileData[1]}`, fileurl: fileurlData });
+			// setTimeout(function () {
+			// 	document.getElementById('myframe').src = iframeSrc;
+			// }, 1000);
+		}
+		this.setState({
+			openFrame: true
+		});
+	};
+
+	closeFrame = () => {
+		this.setState({
+			openFrame: false
+		});
+	};
+
+	downloadImage = () => {
+		const pdfWindow = window.open();
+		pdfWindow.location.href = iframeSrc;
+	};
+
+	handleUnlock = () => {
+		this.setState({
+			isLocked: false
+		});
+		this.refreshgrid();
+	};
+
+	handleLock = () => {
+		this.setState({
+			isLocked: true
+		});
+		this.refreshgrid();
+	};
+
+	getBase64 = async file => {
+		return new Promise((resolve, reject) => {
+			const reader = new FileReader();
+			reader.readAsDataURL(file);
+			reader.onload = () => resolve(reader.result);
+			reader.onerror = error => reject(error);
+		});
+	};
+
+	onSubmit = e => {
+		e.preventDefault();
+		const { uploadDocuments } = this.state;
+		if (uploadDocuments.length > 0) {
+			console.log(uploadDocuments);
+			this.setState({ loader: true, fileFlag: false, disabelUploadBtn: true });
+			// if (this.props.isClient) {
+			axios
+				.post(`${apiUrl}/api/dataentry/createentry`, uploadDocuments)
+				.then(response => response.data)
+				.then(result => {
+					this.getDataEntryList();
+					swal(`file uploaded successfully`, { icon: 'success' });
+
+					this.setState({
+						uploadDocuments: [],
+						loader: false,
+						largerSizeFilenames: [],
+						disabelUploadBtn: false,
+						DailogOpen: false
+					});
+				});
+			// }
+
+			// 	else if (this.props.isClaim) {
+			// 		axios
+			// 			.post(`${apiUrl}/api/claim/report/create`, uploadDocuments)
+			// 			.then(response => response.data)
+			// 			.then(result => {
+			// 				this.props.getReports();
+			// 				swal(`file uploaded successfully`, { icon: 'success' });
+			// 				this.props.closePop();
+			// 				this.setState({
+			// 					uploadDocuments: [],
+			// 					loader: false,
+			// 					largerSizeFilenames: [],
+			// 					disabelUploadBtn: false
+			// 				});
+			// 			});
+			// 	}
+			// } else {
+			// 	this.setState({ fileFlag: true });
+		}
+	};
+
+	fileUpload = filesSelected => {
+		console.log(this.props);
+		const { createdby, sourcetype } = this.state;
+		this.setState({ largerSizeFilenames: [], fileFlag: false });
+		for (let i = 0; i < filesSelected.length; i += 1) {
+			const fsize = filesSelected[i].size;
+			const fileSize = Math.round(fsize / 1024);
+			let fileBuffer;
+			const fileName = filesSelected[i].name;
+			const documentname = filesSelected[i].name;
+			const fileType = filesSelected[i].type;
+
+			if (fileSize < 250000) {
+				this.getBase64(filesSelected[i]).then(data => {
+					if (i === filesSelected.length - 1) {
+						document.getElementById('reportFileUpload').value = '';
+					}
+					if (data !== undefined) {
+						fileBuffer = data;
+						const base64File = data.split(',');
+						if (base64File) {
+							this.setState(prevState => ({
+								uploadDocuments: [
+									...prevState.uploadDocuments,
+									{
+										clientid: this.props.clientid,
+										fileName,
+										documentname,
+										description: '',
+										documenttype: '',
+										file: base64File[1],
+										source: sourcetype,
+										fileType,
+										createdby
+									}
+								]
+							}));
+						}
+					}
+				});
+			} else {
+				this.setState(prevState => ({
+					largerSizeFilenames: [
+						...prevState.largerSizeFilenames,
+						{
+							fileName
+						}
+					]
+				}));
+				console.log('greater than 250mb');
+			}
+		}
+	};
+
+	addReport = () => {
+		this.setState({
+			DailogOpen: true
+		});
+	};
+
+	handleChange = (e, item, index) => {
+		e.preventDefault();
+		const { uploadDocuments } = this.state;
+		const result = [...uploadDocuments];
+		result[index].description = e.target.value;
+		this.setState({ uploadDocuments: result });
+	};
+
+	handleAutoSave = (newValue, item, index) => {
+		const { uploadDocuments } = this.state;
+		const result = uploadDocuments;
+		result[index].documenttype = newValue;
+		this.setState({ uploadDocuments: result });
+	};
+
+	handleCancel = () => {
+		this.setState({ uploadDocuments: [], fileFlag: false, DailogOpen: false });
+	};
+
+	removeFile = (row, rowIndex) => {
+		this.setState(prevState => ({
+			uploadDocuments: prevState.uploadDocuments.filter((file, index) => index !== rowIndex)
+		}));
+	};
+
+	closeLoader = () => {
+		this.setState({ loader: false });
+	};
+
+	closeAssignDialog = () => {
+		this.setState({
+			AssignOpenDialog: false,
+			ryzeFileNumberError: false,
+			ryzeFileNumberErrorText: '',
+			ryzeFileNumber: ''
+		});
+	};
+
+	handleryzeFileNumberChange = e => {
+		const { ryzeFileNumber, assignClaimData } = this.state;
+		if (ryzeFileNumber) {
+			this.setState({
+				ryzeFileNumberError: false,
+				ryzeFileNumberErrorText: ''
+			});
+		}
+		this.setState({
+			[e.target.name]: e.target.value
+		});
+	};
+
+	onAssignClaimSubmit = () => {
+		const { ryzeFileNumber, assignClaimData } = this.state;
+
+		const params = {
+			ryzeFileNumber,
+			file: assignClaimData && assignClaimData.fileurl,
+			documenttype: assignClaimData && assignClaimData.documenttype,
+			documentname: assignClaimData && assignClaimData.documentname,
+			description: assignClaimData && assignClaimData.description,
+			source: 'Manual',
+			createdby: this.state.createdby,
+			dataentryid: assignClaimData && assignClaimData.dataentryid
+		};
+
+		if (ryzeFileNumber === '' || ryzeFileNumber === null) {
+			this.setState({
+				ryzeFileNumberError: true,
+				ryzeFileNumberErrorText: 'This field is required'
+			});
+		} else {
+			this.setState({
+				ryzeFileNumberError: false,
+				ryzeFileNumberErrorText: ''
+			});
+
+			axios
+				.post(`${apiUrl}/api/dataentry/insertassignclaim`, params)
+				.then(response => response.data)
+				.then(
+					result => {
+						if (result && result.status === false) {
+							this.setState({
+								ryzeFileNumberError: true,
+								ryzeFileNumberErrorText: result.message
+							});
+							// swal(`Claim Has Not Been Assigned successfully`, { icon: 'warning' });
+						} else {
+							this.setState({
+								ryzeFileNumberError: false,
+								ryzeFileNumberErrorText: '',
+								ryzeFileNumber: '',
+								AssignOpenDialog: false
+							});
+
+							swal(`Claim Has Been Assigned successfully`, { icon: 'success' });
+							this.getDataEntryList();
+						}
+					},
+					err => {
+						console.log(err);
+					}
+				);
+		}
+	};
+
+	// postEntryintoDocument = param => {
+	// 	axios
+	// 		.post(`${apiUrl}/api/dataentry/insertassignclaim`, param)
+	// 		.then(response => response.data)
+	// 		.then(
+	// 			result => {
+	// 				if (result && result.data && result.data.length) {
+	// 					swal(`Claim Has Been Assigned successfully`, { icon: 'success' });
+	// 				} else {
+	// 					swal(`Claim Has Been Failed To Assigned successfully`, { icon: 'warning' });
+	// 				}
+	// 			},
+	// 			err => {
+	// 				console.log(err);
+	// 			}
+	// 		);
+	// };
+
+	render() {
+		const {
+			error,
+			horizontal,
+			infoopen,
+			infomsg,
+			showHideAdd,
+			showHideDelete,
+			showHideEdit,
+			showHideView,
+			showHideList,
+			filename,
+			pdfDoc,
+			isLocked,
+			showHideAddReports,
+			DailogOpen,
+			largerSizeFilenames,
+			uploadDocuments,
+			loader,
+			fileFlag,
+			disabelUploadBtn,
+			systemFieldData,
+			AssignOpenDialog,
+			ryzeFileNumber,
+			ryzeFileNumberError,
+			ryzeFileNumberErrorText,
+			examiners,
+			selectedRows,
+			updatingAssignments
+		} = this.state;
+		const { classes } = this.props;
+		if (error) {
+			return <div>Error:{error.message}</div>;
+		}
+		return (
+			<div className="w-full h-full ps background-wh p-16" style={{ width: '100%', height: '100%' }}>
+				<Helmet>
+					<meta charSet="utf-8" />
+					<title>Data Entry</title>
+					<meta name="description" content="Ryze Claims" />
+				</Helmet>
+				<BackdropLoader visible={updatingAssignments} message="Processing" />
+				<div>
+					<div className="w-full">
+						<div className="p-4" style={{ marginBottom: '-30px', float: 'left' }}>
+							{/* <h2>Claims</h2> */}
+						</div>
+						<ul className="claim-tabs tabs">
+							<li id="current">
+								<button type="button">Data Entry</button>
+							</li>
+						</ul>
+						<div className="tab-panel">
+							<div className="tabmerge" style={{ top: '10px' }}>
+								<div
+									style={{
+										display: 'flex',
+										float: 'right',
+										clear: 'both',
+										alignItems: 'flex-start'
+									}}
+									className="search_txt"
+								>
+									{' '}
+									<MultipleUserAssignment
+										examinerList={examiners}
+										selectedDataEntries={selectedRows}
+										onSuccess={this.getDataEntryList}
+										onLoadToggle={() =>
+											this.setState(state => ({
+												updatingAssignments: !state.updatingAssignments
+											}))
+										}
+									/>
+									{showHideAddReports && (
+										<div className="flex">
+											<Button
+												style={{ marginRight: '20px' }}
+												variant="contained"
+												color="primary"
+												className={`w-180 flex btn-shadow btn-outline-primary justify-center ${
+													isLocked ? 'cur-not' : ''
+												}`}
+												aria-label="Register"
+												type="button"
+												onClick={this.addReport}
+												disabled={isLocked}
+											>
+												File Upload
+											</Button>
+										</div>
+									)}
+									<TextField
+										type="text"
+										onInput={this.onQuickFilterChanged}
+										id="quickFilter"
+										variant="outlined"
+										size="small"
+										InputProps={{
+											startAdornment: (
+												<InputAdornment position="start">
+													<Icon className="text-20 blackicon" color="action">
+														search
+													</Icon>
+												</InputAdornment>
+											)
+										}}
+										placeholder="Search"
+									/>
+								</div>
+							</div>
+						</div>
+
+						<div>
+							<Dialog
+								fullWidth
+								maxWidth="sm"
+								anchorReference="anchorPosition"
+								anchorPosition={{ top: 400, left: 900 }}
+								anchorOrigin={{
+									vertical: 'bottom',
+									horizontal: 'right'
+								}}
+								classes={{
+									root: classes.dailog,
+									paper: classes.dailog
+								}}
+								transformOrigin={{
+									vertical: 'center',
+									horizontal: 'center'
+								}}
+								open={DailogOpen}
+							>
+								<div
+									className="selectHead"
+									style={{ minHeight: '430px', maxHeight: '530px', width: '100%' }}
+								>
+									<Backdrop className={classes.backdrop} open={loader}>
+										<CircularProgress
+											color="inherit"
+											style={{
+												color: '#7F7F7F',
+												border: '10px solid #A71C20',
+												borderBottomColor: '#3C4B64',
+												borderRadius: '50%'
+											}}
+										/>
+										<h3 style={{ fontWeight: 'bold', marginLeft: '20px' }}>
+											Uploading your files please wait....
+										</h3>
+									</Backdrop>
+									<h1
+										style={{
+											textAlign: 'left',
+											paddingTop: '25px',
+											paddingBottom: '25px',
+											paddingLeft: '20px'
+										}}
+									>
+										Upload Document
+									</h1>
+									<div
+										style={{
+											border: '1px solid #E5E5E5',
+											borderLeft: 'none',
+											borderRight: 'none',
+											borderBottom: 'none'
+										}}
+									>
+										<div style={{ padding: '20px' }}>
+											<Alert
+												severity="info"
+												style={{ background: '#e8f4fd', color: '#0d3c61', boxShadow: 'none' }}
+											>
+												{' '}
+												Individual files must not be larger than 250MB.
+											</Alert>
+											{fileFlag ? (
+												<Alert
+													severity="error"
+													className="mt-16"
+													autoFocus
+													style={{
+														color: '#611a15',
+														background: '#fdecea',
+														boxShadow: 'none'
+													}}
+												>
+													Please Upload atleast one file
+												</Alert>
+											) : (
+												''
+											)}
+											{largerSizeFilenames.map((item, index) => (
+												<Alert severity="error" className="mt-16">
+													<span style={{ fontWeight: 'bold' }}>{item.fileName}</span> -
+													Individual files must not be larger than 250MB.
+												</Alert>
+											))}
+
+											<FileDrop multiple onDrop={(files, event) => this.fileUpload(files, event)}>
+												<div style={{ cursor: 'pointer' }}>
+													<label htmlFor="reportFileUpload">
+														<div style={{ display: 'flex' }}>
+															<FileCopyIcon style={{ fontSize: '9rem' }} />
+															<h2>
+																<div>Click here to upload your files</div>
+																<div>Or</div>
+																<div>Drag your files here</div>
+															</h2>
+														</div>
+													</label>
+												</div>
+											</FileDrop>
+
+											<div style={{ marginTop: '20px', marginBottom: '20px' }}>
+												<input
+													style={{ display: 'none' }}
+													onChange={() => {
+														const filesSelected = document.getElementById(
+															'reportFileUpload'
+														).files;
+														this.fileUpload(filesSelected);
+													}}
+													id="reportFileUpload"
+													multiple
+													type="file"
+												/>
+											</div>
+											{console.log(uploadDocuments, 'uploaddocmuents')}
+											<ValidatorForm onSubmit={this.onSubmit}>
+												{uploadDocuments.map((item, index) => (
+													<div
+														style={{
+															border: '1px solid #E5E5E5',
+															marginBottom: '10px',
+															padding: '10px'
+														}}
+													>
+														<div style={{ display: 'inline' }}>
+															<span style={{ color: '#545CD8', fontSize: '14px' }}>
+																FileName
+															</span>
+															<span style={{ color: '#63D695', fontSize: '13px' }}>
+																:{item.fileName}
+															</span>
+															<button
+																type="button"
+																onClick={() => {
+																	this.removeFile(item, index);
+																}}
+																style={{
+																	float: 'right',
+																	fontSize: '24px',
+																	marginRight: '10px'
+																}}
+															>
+																<i className="material-icons red" title="Delete File">
+																	delete
+																</i>
+															</button>
+														</div>
+														<div className="flex mt-16">
+															<div style={{ flexBasis: '49%' }}>
+																<TextValidator
+																	className="mb-16 flex flex-col  ml-16 input-placeholder"
+																	label="Description *"
+																	name="description"
+																	autoFocus
+																	value={item.description}
+																	size="small"
+																	style={{ width: '95%' }}
+																	type="text"
+																	validators={['required']}
+																	errorMessages={['This field is required']}
+																	onChange={e => this.handleChange(e, item, index)}
+																	variant="outlined"
+																	fullWidth
+																	InputProps={{
+																		classes: {
+																			notchedOutline: classes.notchedOutline,
+																			root: classes.cssOutlinedInput,
+																			focused: classes.cssFocused,
+																			disabled: classes.cssdisabled
+																		}
+																	}}
+																	InputLabelProps={{
+																		classes: {
+																			root: classes.cssLabel,
+																			focused: classes.cssFocused
+																		}
+																	}}
+																/>
+															</div>
+															<div style={{ flexBasis: '49%' }}>
+																<FormControl
+																	variant="outlined"
+																	className="mb-16 ml-16 flex flex-col input-placeholder"
+																	style={{ width: '95%' }}
+																>
+																	<Autocomplete
+																		name="documenttype"
+																		value={item.documenttype}
+																		options={systemFieldData}
+																		getOptionLabel={option => option.fieldsubtype}
+																		renderOption={option => option.fieldsubtype}
+																		onChange={(event, newValue) => {
+																			this.handleAutoSave(newValue, item, index);
+																		}}
+																		onBlur={item.documenttype}
+																		fullWidth
+																		size="small"
+																		renderInput={params => (
+																			<TextValidator
+																				{...params}
+																				label="Document Type *"
+																				variant="outlined"
+																				validators={item.documenttype === ''|| item.documenttype === null  ? ['required'] :[]}
+                                                                                errorMessages={item.documenttype === '' || item.documenttype === null ? ['This field is required'] : []}
+																				InputProps={{
+																					...params.InputProps,
+																					classes: {
+																						notchedOutline:
+																							classes.notchedOutline,
+																						root: classes.cssOutlinedInput,
+																						focused: classes.cssFocused,
+																						disabled: classes.cssdisabled
+																					}
+																				}}
+																				InputLabelProps={{
+																					classes: {
+																						root: classes.cssLabel,
+																						focused: classes.cssFocused
+																					}
+																				}}
+																			/>
+																		)}
+																	/>
+																</FormControl>
+															</div>
+														</div>
+													</div>
+												))}
+
+												<div className="flex flex-row justify-center mb-16">
+													<Button
+														style={{ marginRight: '20px' }}
+														variant="contained"
+														color="primary"
+														className="w-180 mb-16 flex btn-shadow btn-outline-primary justify-center"
+														aria-label="Register"
+														value="selctLossTypes"
+														disabled={disabelUploadBtn}
+														type="submit"
+													>
+														Upload
+													</Button>
+
+													<Button
+														variant="contained"
+														color="primary"
+														style={{
+															marginRight: '20px',
+															backgroundColor: 'white',
+															outline: '1px solid #E5E5E5',
+															color: 'black',
+															borderRadius: '0px'
+														}}
+														className="w-180 mb-16 flex btn-shadow btn-outline-primary justify-center"
+														aria-label="Register"
+														type="button"
+														onClick={this.handleCancel}
+													>
+														Cancel
+													</Button>
+												</div>
+											</ValidatorForm>
+										</div>
+									</div>
+								</div>
+							</Dialog>
+						</div>
+
+						<div>
+							<Dialog
+								fullWidth
+								anchorreference="anchorPosition"
+								anchorposition={{ top: 0, left: 50 }}
+								anchororigin={{
+									vertical: 'bottom',
+									horizontal: 'right'
+								}}
+								transformorigin={{
+									vertical: 'center',
+									horizontal: 'center'
+								}}
+								open={this.state.openFrame}
+								PaperProps={{
+									style: { borderRadius: 0, width: '100%', height: '100%', maxWidth: '100%' }
+								}}
+							>
+								<div
+									className="flex"
+									style={{
+										background: '#3C4B64',
+										paddingTop: '5px',
+										paddingBottom: '5px',
+										color: 'white'
+									}}
+								>
+									<div className="reportIframeTitlepart1">
+										<h3 className="pt-4 pl-10">{filename}</h3>
+									</div>
+									<div className="mr-10 reportIframeTitlepart2">
+										<div className="flex pt-2">
+											{getExt.toString().toLowerCase() === 'jpg' ||
+											getExt.toString().toLowerCase() === 'jfif' ||
+											getExt.toString().toLowerCase() === 'jpeg' ? (
+												<div className="ml-6">
+													<a
+														style={{ fontSize: '20px', color: 'white' }}
+														href={filename}
+														download="gg.jpg"
+														rel="noreferrer"
+													>
+														<GetAppIcon />
+													</a>
+												</div>
+											) : null}
+											<button
+												type="button"
+												style={{
+													top: 10,
+													position: 'absolute',
+													right: 10
+												}}
+												onClick={this.closeFrame}
+											>
+												<div>
+													<i
+														className="material-icons"
+														title="close"
+														style={{ fontSize: '20px' }}
+													>
+														close
+													</i>
+												</div>
+											</button>
+										</div>
+										{/* {this.props.data.reviewtype !== 'Accepted' ||
+								this.props.data.reviewtype !== 'Rejected' ? (
+									<ReviewMenu
+										reviewData={this.state.reviewData}
+										documentid={this.state.documentid}
+										reviewedBy={this.state.reviewedby}
+										getUpdatedReports={this.props.data.getUpdatedReports}
+										openToaster={this.props.data.openToaster}
+									/>
+								) : null} */}
+									</div>
+								</div>
+
+								<DialogContent
+									className={
+										getExt.toString().toLowerCase() === 'jpg' ||
+										getExt.toString().toLowerCase() === 'jpeg' ||
+										getExt.toString().toLowerCase() === 'jfif'
+											? 'jpg-content'
+											: 'dia-content'
+									}
+								>
+									{console.log(getExt.toString().toLowerCase())}
+									{getExt.toString().toLowerCase() === 'pdf' ||
+									getExt.toString().toLowerCase() === 'doc' ||
+									getExt.toString().toLowerCase() === 'docx' ? (
+										<DocViewer pluginRenderers={DocViewerRenderers} documents={pdfDoc} />
+									) : (
+										<div className="imagediv">
+											<img src={this.state.fileurl} alt={filename} />
+										</div>
+									)}
+								</DialogContent>
+							</Dialog>
+						</div>
+
+						<Dialog
+							fullWidth
+							maxWidth="sm"
+							anchorReference="anchorPosition"
+							anchorPosition={{ top: 400, left: 900 }}
+							anchorOrigin={{
+								vertical: 'bottom',
+								horizontal: 'right'
+							}}
+							classes={{
+								root: classes.dailog,
+								paper: classes.dailog
+							}}
+							transformOrigin={{
+								vertical: 'center',
+								horizontal: 'center'
+							}}
+							open={AssignOpenDialog}
+						>
+							<div
+								className="selectHead"
+								style={{
+									width: '100%',
+									minheight: '220px',
+									position: 'relative'
+								}}
+							>
+								<Backdrop className={classes.backdrop} open={loader}>
+									<CircularProgress
+										color="inherit"
+										style={{
+											color: '#7F7F7F',
+											border: '10px solid #A71C20',
+											borderBottomColor: '#3C4B64',
+											borderRadius: '50%'
+										}}
+									/>
+									<h3 style={{ fontWeight: 'bold', marginLeft: '20px' }}>
+										Uploading your files please wait....
+									</h3>
+								</Backdrop>
+								{/* <h1
+									style={{
+										textAlign: 'left',
+										paddingTop: '25px',
+										paddingBottom: '25px',
+										paddingLeft: '20px'
+									}}
+								>
+									Assign Claim
+								</h1> */}
+								<div
+									style={{
+										border: '1px solid #E5E5E5',
+										borderLeft: 'none',
+										borderRight: 'none',
+										borderBottom: 'none'
+									}}
+								>
+									<div style={{ padding: '20px' }}>
+										<ValidatorForm onSubmit={this.onAssignClaimSubmit}>
+											<div className="flex mt-16">
+												<div
+													style={{ flexBasis: '49%', textAlign: 'center', margin: '0 auto' }}
+												>
+													<TextField
+														label="RyzeFileNumber"
+														name="ryzeFileNumber"
+														value={ryzeFileNumber}
+														onChange={e => this.handleryzeFileNumberChange(e)}
+														size="small"
+														style={{ height: 49 }}
+														variant="outlined"
+														InputLabelProps={{
+															classes: {
+																root: classes.cssLabel,
+																focused: classes.cssFocused
+															}
+														}}
+														fullWidth
+														error={ryzeFileNumberError}
+														helperText={ryzeFileNumberErrorText}
+													/>
+												</div>
+											</div>
+
+											<div className="flex flex-row justify-center mb-16 mt-16">
+												<Button
+													style={{ marginRight: '20px' }}
+													variant="contained"
+													color="primary"
+													className="w-180 mb-16 flex btn-shadow btn-outline-primary justify-center"
+													aria-label="Register"
+													value="selctLossTypes"
+													disabled={disabelUploadBtn}
+													type="submit"
+												>
+													Assign Claim
+												</Button>
+
+												<Button
+													variant="contained"
+													color="primary"
+													style={{
+														marginRight: '20px',
+														backgroundColor: 'white',
+														outline: '1px solid #E5E5E5',
+														color: 'black',
+														borderRadius: '0px'
+													}}
+													className="w-180 mb-16 flex btn-shadow btn-outline-primary justify-center"
+													aria-label="Register"
+													type="button"
+													onClick={this.closeAssignDialog}
+												>
+													Cancel
+												</Button>
+											</div>
+										</ValidatorForm>
+									</div>
+								</div>
+							</div>
+						</Dialog>
+
+						<div style={{ height: 'calc(100% - 25px)', clear: 'both', marginTop: '10px' }}>
+							{showHideList && (
+								<div
+									id="myGrid"
+									style={{
+										height: '100%',
+										width: '100%'
+									}}
+									className="ag-theme-balham"
+								>
+									<AgGridReact
+										modules={this.state.modules}
+										columnDefs={this.state.columnDefs}
+										defaultColDef={this.state.defaultColDef}
+										overlayNoRowsTemplate={this.state.overlayNoRowsTemplate}
+										frameworkComponents={this.state.frameworkComponents}
+										overlayLoadingTemplate={this.state.overlayLoadingTemplate}
+										rowSelection={this.state.rowSelection}
+										suppressCellSelection
+										onGridReady={this.onGridReady}
+										rowData={this.state.rowData}
+										rowHeight={45}
+										headerHeight={45}
+										pagination
+										paginationPageSize={this.state.paginationPageSize}
+										domLayout={this.state.domLayout}
+										onSelectionChanged={e =>
+											this.setState({ selectedRows: [...e.api.getSelectedRows()] })
+										}
+										suppressRowClickSelection
+									/>
+								</div>
+							)}
+						</div>
+					</div>
+				</div>
+			</div>
+		);
+	}
+}
+const mapStateToProps = state => ({
+	systemfields: state.CommonReducer.systemfields,
+	userid: state.auth.user.data.userid,
+	clientid: state.auth.user.data.clientid,
+	permissiondata: state.auth,
+	roles: state.auth.user.data.roles,
+	clientroles: state.CommonReducer.roles,
+	clients: state.CommonReducer.clients
+});
+export default withStyles(styles)(withRouter(connect(mapStateToProps, {})(DataEntry)));
