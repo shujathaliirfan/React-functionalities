@@ -1,0 +1,892 @@
+import React from 'react';
+import _ from '@lodash';
+import { TextValidator } from 'react-material-ui-form-validator';
+import { withRouter } from 'react-router-dom';
+import { withStyles } from '@material-ui/styles';
+import swal from 'sweetalert';
+import { MuiPickersUtilsProvider, KeyboardDatePicker } from '@material-ui/pickers';
+import Tooltip from '@material-ui/core/Tooltip';
+import CloseIcon from '@material-ui/icons/Close';
+import CheckIcon from '@material-ui/icons/Check';
+import Grid from '@material-ui/core/Grid';
+import Button from '@material-ui/core/Button';
+import Alert from '@material-ui/lab/Alert';
+import Snackbar from '@material-ui/core/Snackbar';
+import DateFnsUtils from '@date-io/date-fns';
+import moment from 'moment';
+import { Checkbox, FormControlLabel } from '@material-ui/core';
+import { connect } from 'react-redux';
+import axios from 'axios';
+import Settings from '../../../../config/globalConfig';
+import styles from '../../useStyles/materialUIControls';
+
+// import { array } from 'prop-types';
+
+const apiUrl = Settings.API_ROOT;
+class History extends React.PureComponent {
+	constructor(props) {
+		super(props);
+		this.state = {
+			adjusterHistory: [
+				// { value: '', type: '', name: 'adjusteravailablity' },
+				{ value: new Date(), type: 'date', name: 'startdate' },
+				{ value: new Date(), type: 'date', name: 'enddate' },
+				{ value: new Date(), type: 'date', name: 'cuttoffdate' },
+				// { value: '', type: 'textfield', name: 'zipcode' },
+				{ value: '', type: 'checkbox', name: 'available', checked: true },
+				{ value: '', type: 'textfield', name: 'notes' },
+				{ value: '', type: 'button', name: 'Add' }
+			],
+			apiData: [],
+			// apiData: this.props.apiData,
+			// eslint-disable-next-line react/no-unused-state
+			clientid: this.props.location.state.clientid,
+			addRowFlag: false,
+			vertical: 'bottom',
+			horizontal: 'right',
+			infoopen: false,
+			infomsg: '',
+			// eslint-disable-next-line react/no-unused-state
+			adjusteravailablityid: '',
+			isEdit: false,
+			listDetails: [],
+			error: false,
+			minDate: '',
+			istouched: false
+		};
+	}
+
+	componentDidMount() {
+		this.adjusteravailablityList();
+	}
+
+	adjusteravailablityList = () => {
+		axios
+			.get(`${apiUrl}/api/clients/adjusteravaialbilitylist/${this.props.location.state.clientid}`)
+			.then(response => response.data)
+			.then(
+				result => {
+					const mappeddata = result.data.map(i => {
+						return {
+							...i,
+							isClicked: false
+						};
+					});
+
+					this.setState({
+						listDetails: result.data,
+						apiData: mappeddata
+					});
+				},
+				err => {
+					console.log(err);
+
+					swal('Failed to fetch the data ! ', { icon: 'warning' });
+				}
+			);
+	};
+
+	handleChange = (item, e) => {
+		const { adjusterHistory, apiData } = this.state;
+		let result = [...adjusterHistory]; // copy state
+		result = result.map(el => {
+			if (item.type === 'checkbox') {
+				if (el.name === item.name) el.checked = e.target.checked;
+			} else if (item.type === 'date') {
+				if (el.name === item.name) el.value = moment(e).format('MM/DD/YYYY');
+				if (item.name === 'startdate') {
+					result[2].value = moment(e).subtract(4, 'd').format('MM/DD/YYYY');
+					this.setState({
+						minDate: e
+					});
+				}
+
+				const d = moment(e).format('MM/DD/YYYY');
+
+				apiData.forEach(element => {
+					const startDate = moment(element.startdate).format('MM/DD/YYYY');
+					const endDate = moment(element.enddate).format('MM/DD/YYYY');
+					// const isExist = moment(d).isBetween(startDate, endDate);
+
+					const from = Date.parse(startDate);
+					const to = Date.parse(endDate);
+					const check = Date.parse(d);
+
+					if (check <= to && check >= from) {
+						this.setState({
+							infoopen: true,
+							infomsg: 'Date is Already Assigned',
+							error: true
+						});
+						swal(`Date is Already Assigned!`, { icon: 'warning' });
+					}
+
+					// else {
+					// 	this.setState({
+					// 		error: false
+					// 	});
+					// }
+				});
+			} else {
+				el.name === item.name ? (el.value = e.target.value) : '';
+			}
+			return el;
+		});
+		this.setState({ adjusterHistory: result, istouched: true });
+		this.props.getHistory(result);
+	};
+
+	edithandleChange = (item, e, index) => {
+		console.log({ item, e });
+		const { apiData } = this.state;
+
+		let result = [...apiData];
+
+		const tempData = result[index];
+
+		tempData.name = item.name;
+		tempData.type = item.type;
+
+		result = result.map(el => {
+			if (item.type === 'checkbox') {
+				if (el.name === item.name) {
+					result[index][item.name] = e.target.checked;
+				}
+			} else if (item.type === 'date') {
+				if (el.name === item.name) result[index][item.name] = moment(e).format('MM/DD/YYYY');
+				if (el.name === 'startdate') {
+					result[index].cutoffdate = moment(e).subtract(4, 'd').format('MM/DD/YYYY');
+				}
+				if (el.name === 'startdate') {
+					this.setState({
+						minDate: e
+					});
+				}
+
+				apiData.forEach(element => {
+					const startDate = element.startdate;
+					const endDate = element.enddate;
+					const isExist = moment(e).isBetween(startDate, endDate);
+					if (isExist) {
+						this.setState({
+							infoopen: true,
+							infomsg: 'Date is Already Assigned',
+							error: true
+						});
+						swal(`Date is Already Assigned!`, { icon: 'warning' });
+					}
+
+					// else {
+					// 	this.setState({
+					// 		error: false
+					// 	});
+					// }
+				});
+			} else {
+				// console.log(el[item.name])
+				item.name && el.name === item.name ? (result[index][item.name] = e.target.value) : '';
+			}
+			return el;
+		});
+
+		this.setState({ apiData: result });
+		// this.props.getHistory(result);
+	};
+
+	handlecloseinfo = () => {
+		this.setState({
+			infoopen: false
+		});
+	};
+
+	addRow = () => {
+		this.setState({
+			addRowFlag: true,
+			isEdit: false,
+			adjusterHistory: [
+				// { value: '', type: '', name: 'adjusteravailablity' },
+				{ value: new Date(), type: 'date', name: 'startdate' },
+				{ value: new Date(), type: 'date', name: 'enddate' },
+				{ value: new Date(), type: 'date', name: 'cuttoffdate' },
+				// { value: '', type: 'textfield', name: 'zipcode' },
+				{ value: '', type: 'checkbox', name: 'available', checked: false },
+				{ value: '', type: 'textfield', name: 'notes' },
+				{ value: '', type: 'button', name: 'Add' }
+			]
+		});
+	};
+
+	handleEdit = (item, i) => {
+		// this.handleUpdateCancel();
+		const { apiData } = this.state;
+		// const tempData = [...apiData];
+		const tempData = [...apiData].map(x => {
+			return {
+				...x,
+				isClicked: false
+			};
+		});
+
+		tempData[i].isClicked = true;
+
+		this.setState({
+			apiData: tempData
+		});
+	};
+
+	handleUpdateCancel = (item, i) => {
+		const { listDetails } = this.state;
+
+		this.setState({
+			apiData: listDetails
+		});
+	};
+
+	handleAdd = () => {
+		const { error, istouched } = this.state;
+		if (error) {
+			swal('Selected Date has Already Chosen! ', { icon: 'warning' });
+		} else if (!istouched) {
+			swal('Please Select the Date! ', { icon: 'warning' });
+		} else {
+			const adjusterData = this.state;
+			let histroyData = [];
+
+			const startDate = moment(adjusterData.adjusterHistory[0].value).format('MM/DD/YYYY');
+			const endDate = moment(adjusterData.adjusterHistory[2].value).format('MM/DD/YYYY');
+
+			histroyData = [
+				[
+					startDate,
+					adjusterData.adjusterHistory[1].value,
+					endDate,
+					adjusterData.adjusterHistory[3].checked,
+					adjusterData.adjusterHistory[4].value,
+					this.props.userid,
+					this.props.location.state.clientid
+				]
+			];
+
+			const params = {
+				adjusteravailablity: histroyData
+			};
+
+			axios
+				.post(`${apiUrl}/api/clients/adjusteravailablity/create`, params)
+				.then(response => response.data)
+				.then(
+					result => {
+						this.setState({
+							addRowFlag: false,
+							istouched: false,
+							error: false
+						});
+						swal('Availability for the adjuster is created', { icon: 'success' });
+						this.adjusteravailablityList();
+					},
+					err => {
+						console.log(err);
+
+						setTimeout(() => {
+							swal('Availability has been failed to create! ', { icon: 'warning' }).then(value => {
+								this.setState({
+									addRowFlag: false,
+									istouched: false,
+									error: false
+									// adjusterHistory: [
+									// 	// { value: '', type: '', name: 'adjusteravailablity' },
+									// 	{ value: new Date(), type: 'date', name: 'startdate' },
+									// 	{ value: new Date(), type: 'date', name: 'enddate' },
+									// 	{ value: new Date(), type: 'date', name: 'cuttoffdate' },
+									// 	// { value: '', type: 'textfield', name: 'zipcode' },
+									// 	{ value: '', type: 'checkbox', name: 'available', checked: false },
+									// 	{ value: '', type: 'textfield', name: 'notes' },
+									// 	{ value: '', type: 'button', name: 'Add' }
+									// ]
+								});
+							});
+						}, 0);
+					}
+				);
+		}
+	};
+
+	handleUpdate = (item, i) => {
+		const { error } = this.state;
+		if (error) {
+			swal('Selected Date has Already Chosen! ', { icon: 'warning' });
+		} else {
+			axios
+				.put(`${apiUrl}/api/clients/adjusteravailablity/update`, item)
+				.then(response => response.data)
+				.then(
+					result => {
+						this.setState({
+							addRowFlag: false
+						});
+						swal('Status has been updated successfully ', { icon: 'success' });
+						this.handleUpdateCancel();
+						this.adjusteravailablityList();
+					},
+					err => {
+						console.log(err);
+
+						this.setState({});
+
+						swal('Status has been failed to update! ', { icon: 'warning' });
+					}
+				);
+		}
+	};
+
+	handleCancel = () => {
+		this.setState({
+			addRowFlag: false,
+			isEdit: false,
+			istouched: false,
+			error: false
+		});
+	};
+
+	render() {
+		// this.state.apiData = this.props.apiData;
+		const { adjusterHistory, addRowFlag, vertical, horizontal, infomsg, infoopen, isEdit, minDate } = this.state;
+		const { classes, disabled } = this.props;
+
+		console.log(adjusterHistory, 'adjusterHistory');
+
+		return (
+			<div style={{ marginBottom: '10px', marginTop: '30px' }}>
+				<div>
+					<h2 className="generalInfoHeader">Availability</h2>
+					<h2 style={{ marginTop: '-20px' }}>History</h2>
+					{!disabled && (
+						<div className="flex add-claim-btn" style={{ float: 'right', marginBottom: '10px' }}>
+							<button type="button" className="claim-create" onClick={this.addRow}>
+								<i className="material-icons" title="Add client" style={{ fontSize: '18px' }}>
+									person_add
+								</i>
+								<p style={{ fontSize: '14px' }}>New Availablity</p>
+							</button>
+						</div>
+					)}
+				</div>
+
+				<div>
+					<div>
+						<table className="adjusterHisotryTable">
+							<thead style={{ height: '50px' }}>
+								<tr>
+									{/* <th>
+										<h6>Adjuster Avaiablity Id</h6>
+									</th> */}
+									<th style={{ width: '245px' }}>
+										<h6>Start Date</h6>
+									</th>
+									<th style={{ width: '245px' }}>
+										<h6>End Date</h6>
+									</th>
+									<th style={{ width: '245px' }}>
+										<h6>Cut Off Date</h6>
+									</th>
+									{/* <th>
+										<h6>Zip Code</h6>
+									</th> */}
+									<th style={{ width: '145px' }}>
+										<h6>Avaiable</h6>
+									</th>
+									<th>
+										<h6>Notes</h6>
+									</th>
+									<th style={addRowFlag ? { width: '145px' } : { width: '122px' }}>
+										<h6>ACTION</h6>
+									</th>
+								</tr>
+							</thead>
+
+							<tbody>
+								<tr>
+									{this.state.apiData?.length > 0 && !addRowFlag
+										? ''
+										: adjusterHistory?.map((item, i) =>
+												item.type === 'textfield' ? (
+													<td key={i}>
+														<TextValidator
+															className="p-2 mr-16 mt-16 input-placeholder"
+															type="text"
+															name={item.name}
+															onChange={e => this.handleChange(item, e)}
+															disabled={disabled}
+															InputProps={{
+																classes: {
+																	notchedOutline: classes.notchedOutline,
+																	root: classes.cssOutlinedInput,
+																	focused: classes.cssFocused
+																}
+															}}
+															InputLabelProps={{
+																classes: {
+																	root: classes.cssLabel,
+																	focused: classes.cssFocused
+																}
+															}}
+															value={item.value}
+															variant="outlined"
+															size="small"
+															fullWidth
+														/>
+													</td>
+												) : item.type === 'date' ? (
+													<td key={i}>
+														<div style={{ marginTop: '10px' }}>
+															<MuiPickersUtilsProvider
+																utils={DateFnsUtils}
+																className="mb-16"
+															>
+																<Grid
+																	container
+																	justify="space-around"
+																	className="clientDob-Grid"
+																>
+																	<KeyboardDatePicker
+																		autoOk
+																		variant="dialog"
+																		format="MM/dd/yyyy"
+																		className="mb-16 loss-date availablity-date input-placeholder"
+																		margin="normal"
+																		id="date-picker-inline"
+																		name={item.name}
+																		value={moment(item.value).format('MM/DD/YYYY')}
+																		minDate={
+																			item.name === 'enddate'
+																				? minDate
+																				: item.name === 'startdate'
+																				? item.value
+																				: ''
+																		}
+																		// maxDate={new Date()}
+																		disabled={disabled}
+																		onChange={e => {
+																			this.handleChange(item, e);
+																		}}
+																		KeyboardButtonProps={{
+																			'aria-label': 'change date'
+																		}}
+																		style={{ borderRadius: '0px', width: '58%' }}
+																		fullWidth
+																	/>
+																</Grid>
+															</MuiPickersUtilsProvider>
+														</div>
+													</td>
+												) : item.type === 'button' ? (
+													// <td key={i} />
+													<td key={i}>
+														{/* {isEdit ? (
+															<>
+																<FormControlLabel
+																	key={i}
+																	style={{
+																		marginTop: '2.5%',
+																		marginLeft: '0px',
+																		fontSize: '0.5vw'
+																	}}
+																	disabled={disabled}
+																	control={
+																		<Button
+																			variant="contained"
+																			color="primary"
+																			className="w-180  flex btn-shadow btn-outline-primary justify-center"
+																			aria-label="Register"
+																			type="button"
+																			onClick={e => this.handleUpdate(e,i)}
+																		>
+																			Update
+																		</Button>
+																	}
+																/>
+
+																<FormControlLabel
+																	key={i}
+																	style={{
+																		marginTop: '2.5%',
+																		marginLeft: '0px',
+																		fontSize: '0.5vw'
+																	}}
+																	disabled={disabled}
+																	control={
+																		<Button
+																			variant="contained"
+																			color="primary"
+																			className="w-180  flex btn-shadow btn-outline-primary justify-center"
+																			aria-label="Register"
+																			type="button"
+																			onClick={e => this.handleCancel()}
+																		>
+																			Cancel
+																		</Button>
+																	}
+																/>
+															</>
+														) : ( */}
+														<div style={{ display: 'flex' }}>
+															<FormControlLabel
+																key={i}
+																style={{
+																	marginTop: '2.5%',
+																	marginLeft: '0px',
+																	fontSize: '0.5vw'
+																}}
+																disabled={disabled}
+																control={
+																	<Tooltip title="Add" placement="bottom">
+																		<Button
+																			// variant="contained"
+																			// color="primary"
+																			// className="w-180 flex btn-shadow btn-outline-primary justify-center"
+																			// aria-label="Register"
+																			type="button"
+																			onClick={e => this.handleAdd(e)}
+																		>
+																			<CheckIcon
+																				style={{
+																					fontSize: '20px',
+																					fontWeight: 'bolder',
+																					color: 'green'
+																				}}
+																			/>
+																		</Button>
+																	</Tooltip>
+																}
+															/>
+
+															<FormControlLabel
+																key={i}
+																style={{
+																	marginTop: '2.5%',
+																	marginLeft: '0px',
+																	fontSize: '0.5vw'
+																}}
+																disabled={disabled}
+																control={
+																	<Tooltip title="Cancel" placement="bottom">
+																		<Button
+																			// variant="contained"
+																			// color="primary"
+																			// className="w-180  flex btn-shadow btn-outline-primary justify-center"
+																			// aria-label="Register"
+																			type="button"
+																			onClick={e => this.handleCancel()}
+																		>
+																			<CloseIcon
+																				style={{
+																					fontSize: '20px',
+																					fontWeight: 'bolder',
+																					color: 'red'
+																				}}
+																			/>
+																		</Button>
+																	</Tooltip>
+																}
+															/>
+														</div>
+														{/* )} */}
+													</td>
+												) : (
+													<td key={i}>
+														<FormControlLabel
+															key={i}
+															style={{
+																marginTop: '-2.5%',
+																marginLeft: '0px',
+																fontSize: '0.5vw'
+															}}
+															// disabled={disabled}
+															control={
+																<Checkbox
+																	checked={item.checked}
+																	name={item.name}
+																	onChange={e => this.handleChange(item, e)}
+																/>
+															}
+														/>
+													</td>
+												)
+										  )}
+								</tr>
+
+								{this.state.apiData?.map((item, i) => (
+									<tr key={item.adusteravailablityid}>
+										{/* <td>{item.adusteravailablityid}</td> */}
+										<td>
+											{item.isClicked ? (
+												<div style={{ marginTop: '10px' }}>
+													<MuiPickersUtilsProvider utils={DateFnsUtils} className="mb-16">
+														<Grid
+															container
+															justify="space-around"
+															className="clientDob-Grid"
+														>
+															<KeyboardDatePicker
+																autoOk
+																variant="dialog"
+																format="MM/dd/yyyy"
+																className="mb-16 loss-date availablity-date input-placeholder"
+																margin="normal"
+																id="date-picker-inline"
+																name={item.name}
+																value={item.startdate}
+																// maxDate={new Date()}
+																disabled={disabled}
+																onChange={e => {
+																	this.edithandleChange(
+																		{ ...item, type: 'date', name: 'startdate' },
+																		e,
+																		i
+																	);
+																}}
+																KeyboardButtonProps={{
+																	'aria-label': 'change date'
+																}}
+																style={{ borderRadius: '0px', width: '58%' }}
+																fullWidth
+															/>
+														</Grid>
+													</MuiPickersUtilsProvider>
+												</div>
+											) : (
+												moment(item.startdate).format('MM-DD-YYYY')
+											)}
+										</td>
+										<td>
+											{item.isClicked ? (
+												<div style={{ marginTop: '10px' }}>
+													<MuiPickersUtilsProvider utils={DateFnsUtils} className="mb-16">
+														<Grid
+															container
+															justify="space-around"
+															className="clientDob-Grid"
+														>
+															<KeyboardDatePicker
+																autoOk
+																variant="dialog"
+																format="MM/dd/yyyy"
+																className="mb-16 loss-date availablity-date input-placeholder"
+																margin="normal"
+																id="date-picker-inline"
+																name={item.name}
+																value={item.enddate}
+																minDate={item.startdate}
+																disabled={disabled}
+																onChange={e => {
+																	// this.handleChange(item, e);
+																	this.edithandleChange(
+																		{ ...item, type: 'date', name: 'enddate' },
+																		e,
+																		i
+																	);
+																}}
+																KeyboardButtonProps={{
+																	'aria-label': 'change date'
+																}}
+																style={{ borderRadius: '0px', width: '58%' }}
+																fullWidth
+															/>
+														</Grid>
+													</MuiPickersUtilsProvider>
+												</div>
+											) : (
+												moment(item.enddate).format('MM-DD-YYYY')
+											)}
+										</td>
+										<td>
+											{item.isClicked ? (
+												<div style={{ marginTop: '10px' }}>
+													<MuiPickersUtilsProvider utils={DateFnsUtils} className="mb-16">
+														<Grid
+															container
+															justify="space-around"
+															className="clientDob-Grid"
+														>
+															<KeyboardDatePicker
+																autoOk
+																variant="dialog"
+																format="MM/dd/yyyy"
+																className="mb-16 loss-date availablity-date input-placeholder"
+																margin="normal"
+																id="date-picker-inline"
+																name={item.name}
+																value={item.cutoffdate}
+																// maxDate={new Date()}
+																disabled={disabled}
+																onChange={e => {
+																	this.edithandleChange(
+																		{ ...item, type: 'date', name: 'cutoffdate' },
+																		e,
+																		i
+																	);
+																}}
+																KeyboardButtonProps={{
+																	'aria-label': 'change date'
+																}}
+																style={{ borderRadius: '0px', width: '58%' }}
+																fullWidth
+															/>
+														</Grid>
+													</MuiPickersUtilsProvider>
+												</div>
+											) : (
+												moment(item.cutoffdate).format('MM-DD-YYYY')
+											)}
+										</td>
+										{/* <td>{item.zipcode}</td> */}
+										<td>
+											{/* <FormControlLabel
+												key={i}
+												style={{ marginTop: '-2.5%', marginLeft: '0px', fontSize: '0.5vw' }}
+												disabled={disabled}
+												control={<Checkbox checked={item.available} />}
+											/> */}
+
+											{item.isClicked ? (
+												<FormControlLabel
+													key={i}
+													style={{
+														marginTop: '-2.5%',
+														marginLeft: '0px',
+														fontSize: '0.5vw'
+													}}
+													// disabled={disabled}
+													control={
+														<Checkbox
+															key={i}
+															checked={item.available}
+															name={item.name}
+															onChange={e =>
+																this.edithandleChange(
+																	{ ...item, type: 'checkbox', name: 'available' },
+																	e,
+																	i
+																)
+															}
+														/>
+													}
+												/>
+											) : (
+												<FormControlLabel
+													key={i}
+													style={{ marginTop: '-2.5%', marginLeft: '0px', fontSize: '0.5vw' }}
+													disabled={disabled}
+													control={<Checkbox checked={item.available} />}
+												/>
+											)}
+										</td>
+										<td>
+											{item.isClicked ? (
+												<TextValidator
+													className="p-2 mr-16 mt-16 input-placeholder"
+													type="text"
+													name="
+													notes"
+													onChange={e =>
+														this.edithandleChange(
+															{ ...item, type: 'textfield', name: 'notes' },
+															e,
+															i
+														)
+													}
+													disabled={disabled}
+													InputProps={{
+														classes: {
+															notchedOutline: classes.notchedOutline,
+															root: classes.cssOutlinedInput,
+															focused: classes.cssFocused
+														}
+													}}
+													InputLabelProps={{
+														classes: {
+															root: classes.cssLabel,
+															focused: classes.cssFocused
+														}
+													}}
+													value={item.notes}
+													variant="outlined"
+													size="small"
+													fullWidth
+												/>
+											) : (
+												item.notes
+											)}
+										</td>
+										<td>
+											{item.isClicked ? (
+												<div style={{ display: 'flex' }}>
+													<Tooltip title="Update" placement="bottom">
+														<Button
+															// style={{ margin: 'auto' }}
+															// variant="contained"
+															// color="primary"
+															// className="w-180  flex btn-shadow btn-outline-primary justify-center"
+															// aria-label="Register"
+															type="button"
+															onClick={() => this.handleUpdate(item, i)}
+														>
+															<CheckIcon
+																style={{
+																	fontSize: '20px',
+																	fontWeight: 'bolder',
+																	color: 'green'
+																}}
+															/>
+														</Button>
+													</Tooltip>
+													<Tooltip title="Cancel" placement="bottom">
+														<Button
+															style={{ margin: 'auto' }}
+															type="button"
+															onClick={() => this.handleUpdateCancel(item, i)}
+														>
+															<CloseIcon
+																style={{
+																	fontSize: '20px',
+																	fontWeight: 'bolder',
+																	color: 'red'
+																}}
+															/>
+														</Button>
+													</Tooltip>
+												</div>
+											) : (
+												<Tooltip title="Add" placement="bottom">
+													<Button
+														// style={{ margin: 'auto' }}
+														// variant="contained"
+														// color="primary"
+														// className="w-180  flex btn-shadow btn-outline-primary justify-center"
+														// aria-label="Register"
+														type="button"
+														onClick={() => this.handleEdit(item, i)}
+													>
+														<i style={{ fontSize: '19px' }} className="material-icons edi">
+															edit
+														</i>
+													</Button>
+												</Tooltip>
+											)}
+										</td>
+									</tr>
+								))}
+							</tbody>
+						</table>
+					</div>
+				</div>
+			</div>
+		);
+	}
+}
+
+const mapStateToProps = state => ({
+	userid: state.auth.user.data.userid
+});
+
+export default withRouter(withStyles(styles)(connect(mapStateToProps, {})(History)));
