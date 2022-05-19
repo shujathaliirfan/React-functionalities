@@ -1,0 +1,115 @@
+exports.send_invoicemail = async (req, res, next) => {
+  try {
+    logger.info("Send a invoice mail Req Recieved", {
+      username: res.locals.username,
+      reqdetails: "Invoice",
+    });
+
+    const { attachmentLink  , mailto} = req.body;
+
+    let base64data;
+
+    if (attachmentLink) {
+      const response = await realaxiosinstance.get(attachmentLink, {
+        responseType: "arraybuffer",
+        responseEncoding: "binary",
+        headers: {
+          "Content-Type": "application/pdf",
+        },
+      });
+      base64data = Buffer.from(response.data).toString("base64");
+    }
+
+    let mails = "";
+    for (let i = 0; i < mailto.length; i++) {
+   if(mailto.length - 1 === i) {
+     mails  += mailto[i].email
+  }else {
+    mails  += mailto[i].email + ",";
+  }     
+    }
+
+  
+    
+    var data = {
+      to: mails,
+      from: mailconfig.fromEmail,
+      subject: req.body.mailsub,
+      // cc:[req.body.mailcc],
+
+      cc: req.body.mailcc,
+
+      attachments: [
+        {
+          filename: req.body.attachmentName,
+          content: req.body.attachmentBase64
+            ? req.body.attachmentBase64
+            : base64data,
+          encoding: "base64",
+        },
+      ],
+      html:
+        "</b>" +
+        "<br/><br/><br/>" +
+        req.body.mailmessage +
+        " <br/><br/><br/><br/><br/> <b>Thanks,</b><br/><br/>Ryzeclaims Team.",
+    };
+
+    const mail_response = await mail.mailSend(data,true);
+    if (mail_response) {
+      logger.info("Invoice Mail Sent", {
+        reqdetails: "Invoice",
+      });
+      return res.json({
+        status: true,
+        message: "Kindly check your email for further instructions",
+      });
+    } else {
+      logger.error("There is some internal issue", {
+        reqdetails: "Invoice",
+      });
+      return res.json({ message: "There is some internal issue" });
+    }
+  } catch (error) {
+    next(error);
+  }
+};
+
+=============
+
+const nodemailer=require('nodemailer')
+
+
+const user=process.env.SMTP_USER
+const pass=process.env.SMTP_PASS
+const enable_dev_mode=process.env.ENABLE_MAIL_DEVLEOPER_MODE;
+const developers_mail=process.env.DEVELOPERS_MAIL
+const host=process.env.SMTP_HOST
+const port=process.env.SMTP_PORT
+
+const smtpTransport = nodemailer.createTransport({
+    service:"Outlook365",
+    host:host,
+    port:port,
+    auth: { 
+      user: user,
+      pass: pass
+    },
+});
+
+
+exports.mailSend=(data,isTestgroup=false)=>{
+    if (!isTestgroup) {
+        if (Number(enable_dev_mode)) {
+            data.to = developers_mail
+        }
+    }
+    
+    return new Promise( (res,rej)=>{
+        smtpTransport.sendMail(data, function (err) {
+            if (!err) return res(true) 
+            else  rej(err)
+        });
+    })
+    
+}
