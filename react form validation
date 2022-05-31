@@ -1,0 +1,289 @@
+const [user, setUser] = useState({
+		firstName: props.user.firstname,
+		lastName: props.user.lastname,
+		phone: props.user.phoneno,
+		email: props.user.email,
+		companyName: props.user.companyname
+	});
+	const [error, setError] = useState({});
+
+
+const handleChange = e => {
+		const { value } = e.target;
+
+		setUser({ ...user, [e.target.name]: value });
+
+		switch (e.target.name) {
+			case 'firstName':
+				const namevalid = validateFN(value);
+				if (namevalid) {
+					setError({
+						firstNameError: namevalid
+					});
+				} else {
+					delete error.firstNameError;
+				}
+
+				break;
+			case 'lastName':
+				const lastvalid = validateLN(value);
+
+				if (lastvalid) {
+					setError({
+						lastNameError: lastvalid
+					});
+				} else {
+					delete error.lastNameError;
+				}
+
+				break;
+			case 'email':
+				const emailvalid = validateEmail(value);
+
+				if (emailvalid) {
+					setError({
+						emailError: emailvalid
+					});
+				} else {
+					delete error.emailError;
+				}
+
+				break;
+			case 'phone':
+				const phonevalid = validatePhone(value);
+				if (phonevalid) {
+					setError({
+						phoneError: phonevalid
+					});
+				} else {
+					delete error.phoneError;
+				}
+
+				break;
+			case 'companyName':
+				const companyvalid = validateCompanyname(value);
+				if (companyvalid) {
+					setError({
+						companyNameError: companyvalid
+					});
+				} else {
+					delete error.companyNameError;
+				}
+
+				break;
+			default:
+				break;
+		}
+	};
+  
+  \
+  	const handleSave = async e => {
+		if (Object.keys(error).length === 0) {
+    
+    }}
+    
+    
+    ====================================================
+    
+    	validateClientInformation = () =>
+		new Promise(resolve => {
+			const { clientInfo } = this.state;
+			let isValid = true;
+			if (!clientInfo.company?.trim()) {
+				isValid = false;
+				this.setState(state => ({
+					clientInfo: { ...state.clientInfo, companyError: 'This field is required' }
+				}));
+			}
+			if (clientInfo.adjusterEmail?.trim() && !clientInfo.adjusterName) {
+				isValid = false;
+				this.setState(state => ({
+					clientInfo: { ...state.clientInfo, adjusterNameError: 'This field is required' }
+				}));
+			}
+			if (clientInfo.adjusterEmail?.trim()) {
+				const emailInvalidStatus = validateEmail(clientInfo.adjusterEmail);
+				if (emailInvalidStatus) {
+					isValid = false;
+					this.setState(state => ({
+						clientInfo: { ...state.clientInfo, adjusterEmailError: emailInvalidStatus }
+					}));
+				}
+			}
+			if (clientInfo.fax?.trim()) {
+				const phoneInvalidStatus = validatePhone(null, clientInfo.fax);
+				if (phoneInvalidStatus) {
+					isValid = false;
+					this.setState(state => ({
+						clientInfo: { ...state.clientInfo, faxError: phoneInvalidStatus }
+					}));
+				}
+			}
+			if (clientInfo.fax?.trim() && !clientInfo.extension) {
+				isValid = false;
+				this.setState(state => ({
+					clientInfo: { ...state.clientInfo, extensionError: 'This field is required' }
+				}));
+			}
+			if (clientInfo.extension?.trim() && !clientInfo.fax) {
+				isValid = false;
+				this.setState(state => ({
+					clientInfo: { ...state.clientInfo, faxError: 'This field is required' }
+				}));
+			}
+			if (clientInfo.extension?.trim() && clientInfo.extension?.length < 3) {
+				isValid = false;
+				this.setState(state => ({
+					clientInfo: { ...state.clientInfo, extensionError: 'Invalid Extension' }
+				}));
+			}
+			clientInfo.addresses.forEach((address, index) => {
+				if (address.zip?.trim()) {
+					const zipInvalidStatus = validateZip(address.zip);
+					if (zipInvalidStatus) {
+						isValid = false;
+						const updatedAddresses = [...clientInfo.addresses];
+						updatedAddresses.splice(index, 1, {
+							...clientInfo.addresses[index],
+							zipError: zipInvalidStatus
+						});
+						this.setState(state => ({
+							clientInfo: { ...state.clientInfo, addresses: updatedAddresses }
+						}));
+					}
+				}
+			});
+			resolve(isValid);
+		});
+
+	validateInsuredInformation = () =>
+		new Promise(resolve => {
+			const { insuredInfo } = this.state;
+			let isValid = true;
+			if (insuredInfo.email?.trim() && !insuredInfo.name?.trim()) {
+				isValid = false;
+				this.setState(state => ({
+					insuredInfo: { ...state.insuredInfo, nameError: 'This field is required' }
+				}));
+			}
+			if (insuredInfo.email?.trim()) {
+				const emailInvalidStatus = validateEmail(insuredInfo.email);
+				if (emailInvalidStatus) {
+					isValid = false;
+					this.setState(state => ({
+						insuredInfo: { ...state.insuredInfo, emailError: emailInvalidStatus }
+					}));
+				}
+			}
+			if (insuredInfo.primaryPhone?.trim()) {
+				const phoneInvalidStatus = validatePhone(null, insuredInfo.primaryPhone);
+				if (phoneInvalidStatus) {
+					isValid = false;
+					this.setState(state => ({
+						insuredInfo: { ...state.insuredInfo, primaryPhoneError: phoneInvalidStatus }
+					}));
+				}
+			}
+			if (insuredInfo.secondaryPhone?.trim()) {
+				const phoneInvalidStatus = validatePhone(null, insuredInfo.secondaryPhone);
+				if (phoneInvalidStatus) {
+					isValid = false;
+					this.setState(state => ({
+						insuredInfo: { ...state.insuredInfo, secondaryPhoneError: phoneInvalidStatus }
+					}));
+				}
+			}
+			insuredInfo.addresses.forEach((address, index) => {
+				if (address.zip?.trim()) {
+					const zipInvalidStatus = validateZip(address.zip);
+					if (zipInvalidStatus) {
+						isValid = false;
+						const updatedAddresses = [...insuredInfo.addresses];
+						updatedAddresses.splice(index, 1, {
+							...insuredInfo.addresses[index],
+							zipError: zipInvalidStatus
+						});
+						this.setState(state => ({
+							insuredInfo: { ...state.insuredInfo, addresses: updatedAddresses }
+						}));
+					}
+				}
+			});
+			resolve(isValid);
+		});
+
+	validateClaimantInformation = () =>
+		new Promise(resolve => {
+			const { claimantInfo } = this.state;
+			let isValid = true;
+			if (claimantInfo.email?.trim() && !claimantInfo.name?.trim()) {
+				isValid = false;
+				this.setState(state => ({
+					claimantInfo: { ...state.claimantInfo, nameError: 'This field is required' }
+				}));
+			}
+			if (claimantInfo.email?.trim()) {
+				const emailInvalidStatus = validateEmail(claimantInfo.email);
+				if (emailInvalidStatus) {
+					isValid = false;
+					this.setState(state => ({
+						claimantInfo: { ...state.claimantInfo, emailError: emailInvalidStatus }
+					}));
+				}
+			}
+			if (claimantInfo.primaryPhone?.trim()) {
+				const phoneInvalidStatus = validatePhone(null, claimantInfo.primaryPhone);
+				if (phoneInvalidStatus) {
+					isValid = false;
+					this.setState(state => ({
+						claimantInfo: { ...state.claimantInfo, primaryPhoneError: phoneInvalidStatus }
+					}));
+				}
+			}
+			if (claimantInfo.secondaryPhone?.trim()) {
+				const phoneInvalidStatus = validatePhone(null, claimantInfo.secondaryPhone);
+				if (phoneInvalidStatus) {
+					isValid = false;
+					this.setState(state => ({
+						claimantInfo: { ...state.claimantInfo, secondaryPhoneError: phoneInvalidStatus }
+					}));
+				}
+			}
+			claimantInfo.addresses.forEach((address, index) => {
+				if (address.zip?.trim()) {
+					const zipInvalidStatus = validateZip(address.zip);
+					if (zipInvalidStatus) {
+						isValid = false;
+						const updatedAddresses = [...claimantInfo.addresses];
+						updatedAddresses.splice(index, 1, {
+							...claimantInfo.addresses[index],
+							zipError: zipInvalidStatus
+						});
+						this.setState(state => ({
+							claimantInfo: { ...state.claimantInfo, addresses: updatedAddresses }
+						}));
+					}
+				}
+			});
+			resolve(isValid);
+		});
+    
+    
+    handleSubmit = async () => {
+		const { clientInfo, insuredInfo, claimantInfo, coverageInfo, captchaEntered, lossInfo } = this.state;
+		const clientInfoValid = await this.validateClientInformation();
+		const insuredInfoValid = await this.validateInsuredInformation();
+		const claimantValid = await this.validateClaimantInformation();
+		if (!clientInfoValid || !insuredInfoValid || !claimantValid) {
+			return;
+		}
+    
+    
+    }}
+    
+    
+    
+    
+    
+    
+    
