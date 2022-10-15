@@ -1,0 +1,162 @@
+                ================ Backend====================================
+=========== socket.js=======================
+const { logger } = require("./config/winstonlog");
+
+exports.socketInitiation = (io) => {
+
+
+
+  // establishing connection
+  let users = [];
+
+  io.on("connection", (socket) => {
+    let userid = socket.handshake.auth?.token;
+    let name = socket.handshake.auth?.name;
+
+  
+
+    if (userid) {
+      users.push({ userid: userid, name: name, socketid: socket?.id });
+      const check_user = users.filter((x) => x.userid === userid);
+      if (check_user.length === 1) {
+        logger.info(
+          `Web Socket Connection Successfully created for userid-${userid}`,
+          {
+            username: name,
+            reqdetails: "Web Socket",
+          }
+        );
+      }
+    }
+
+   
+    // Disconnecting the socket 
+
+    socket.on("disconnect", () => {
+
+      if (userid) {    
+           for (var i = 0; i < users.length; i++) {          
+          if (users[i].userid === userid && users[i].socketid === socket?.id) {
+            users.splice(i, 1);           
+            
+          }
+        }
+
+        const check_user = users.filter(x => x.userid === userid );
+
+          if (check_user.length === 0) {
+            logger.info(`Web Socket Connection Is Terminated for userid-${userid}`, {
+              username: name,
+              reqdetails: "Web Socket",
+            });
+          }
+      }
+
+    });
+
+    
+
+
+    //  emitting receied message to all connected users
+    socket.on("additinalRole", (msg) => {
+      io.sockets.emit("messageResponse", msg);
+    });
+  });
+};
+
+
+= server.js================
+
+const http = require('http');
+const server = http.createServer(app);
+const { Server } = require("socket.io");
+const { socketInitiation } = require("./socket");
+const io = new Server(server);
+
+server.listen(port, async () => {
+   logger.info(`Server is listening on port ${port} \n =================================================== \n \tAPI Started @ ${moment().format('MMMM Do YYYY, HH:mm:ss')} \n ===================================================`, {
+      reqdetails: "Server",
+   });
+
+   socketInitiation(io)
+   console.log(`Server is listening on port ${port}`);   
+   //await conversionwebhook.ConversionSchedule24Hours();
+});
+
+
+
+
+======================= front end =====================
+
+
+
+========= socket.js ===========================
+
+/* eslint-disable import/prefer-default-export */
+/* eslint-disable prettier/prettier */
+import { io } from 'socket.io-client';
+import Settings from 'config/globalConfig';
+
+
+const API_URL = Settings.API_ROOT;
+
+// eslint-disable-next-line import/prefer-default-export
+// export const socket = io(API_URL , {
+// 	cors: {
+// 		origin: API_URL ,
+// 		credentials: true
+// 	},
+// 	transports: ['websocket'],
+// 	auth: {
+// 		token: ""
+// 	  }
+// });
+
+
+export const socket =  (user,name) => {
+
+	return io(API_URL , {
+		cors: {
+			origin: API_URL ,
+			credentials: true
+		},
+		transports: ['websocket'],
+		auth: {
+			token: user ,
+			name
+		}
+	});
+};
+
+
+ =========app.js===========
+
+
+const dispatch = useDispatch();
+	const user = useSelector(({ auth }) => auth.user?.data?.userid );
+  const name = useSelector(({ auth }) => auth.user?.data?.displayName);
+
+	
+	useEffect(() => {
+		if (user) {
+    	socket(user,name);
+		}
+	}, [user]);
+
+  const socketsocket1 = socket();
+
+	useEffect(() => {
+		socketsocket1.on('messageResponse', data => dispatch(updateClients(data)));
+	}, [socketsocket1]);
+
+
+========================== other page (update.jsx) u want to emit =========================
+
+
+import { socket } from '../../utils/socket';
+
+
+
+
+const socketsocket1 = socket();
+socketsocket1.emit('additinalRole',payload)
